@@ -1,0 +1,16 @@
+version: '2.3'
+services:
+  redis:
+    image: redis:5.0.3
+    ports:
+      - "6379:6379"
+
+  service:
+    image: registry.insight-centre.org/sit/mps/adaptation-planner:dev
+    command: echo "ok"
+    build:
+      context: '.'
+      dockerfile: 'Dockerfile'
+      args:
+        SIT_PYPI_USER_VAR: ${SIT_PYPI_USER}
+        SIT_PYPI_PASS_VAR: ${SIT_PYPI_PASS}
