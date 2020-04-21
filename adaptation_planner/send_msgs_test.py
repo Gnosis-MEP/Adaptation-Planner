@@ -23,24 +23,22 @@ def new_action_msg(action, event_data):
 
 def send_action_msgs(service_cmd):
     msg_1 = new_action_msg(
-        'someAction',
+        'updateSchedulerMock',
         {
-            'some': 'event',
-            'data': 'to be used'
         }
     )
-    msg_2 = new_action_msg(
-        'someOtherAction',
-        {
-            'some': 'other event',
-            'data': 'to be used'
-        }
-    )
+    # msg_2 = new_action_msg(
+    #     'someOtherAction',
+    #     {
+    #         'some': 'other event',
+    #         'data': 'to be used'
+    #     }
+    # )
 
     print(f'Sending msg {msg_1}')
     service_cmd.write_events(msg_1)
-    print(f'Sending msg {msg_2}')
-    service_cmd.write_events(msg_2)
+    # print(f'Sending msg {msg_2}')
+    # service_cmd.write_events(msg_2)
 
 
 def send_data_msg(service_stream):
@@ -62,7 +60,7 @@ def main():
     service_stream = stream_factory.create(SERVICE_STREAM_KEY, stype='streamOnly')
     import ipdb; ipdb.set_trace()
     send_action_msgs(service_cmd)
-    send_data_msg(service_stream)
+    # send_data_msg(service_stream)
 
 
 if __name__ == '__main__':

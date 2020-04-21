@@ -33,28 +33,28 @@ class AdaptationPlanner(BaseTracerService):
     def process_action(self, action, event_data, json_msg):
         if not super(AdaptationPlanner, self).process_action(action, event_data, json_msg):
             return False
-        if action == 'someAction':
-            # do some action
-            pass
+        if action == 'updateSchedulerMock':
+            self.send_plan_to_scheduler(self.scheduler_prepare_plan())
 
     def scheduler_prepare_plan(self):
         return {
             'dataflow': {
-                'buffer1': ['od-data']
+                'buffer1': ['od-data', 'ed-data', 'wm-data']
             }
         }
 
     def get_destination_streams(self, destination):
         return self.stream_factory.create(destination, stype='streamOnly')
 
-    def send_plan_to_scheduler(self):
-        event_data = {
+    def send_plan_to_scheduler(self, adaptive_plan):
+        new_event_data = {
+            'id': self.service_based_random_event_id(),
             'action': 'executeAdaptivePlan',
         }
-        event_data.update(self.scheduler_prepare_plan())
+        new_event_data.update(adaptive_plan)
 
         # another hacky hack. hardcoding the stream key for the scheduler
-        self.write_event_with_trace(event_data, self.get_destination_streams('sc-cmd'))
+        self.write_event_with_trace(new_event_data, self.get_destination_streams('sc-cmd'))
 
     def log_state(self):
         super(AdaptationPlanner, self).log_state()
