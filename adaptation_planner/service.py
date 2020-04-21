@@ -39,7 +39,7 @@ class AdaptationPlanner(BaseTracerService):
     def scheduler_prepare_plan(self):
         return {
             'dataflow': {
-                'buffer1': ['od-data', 'ed-data', 'wm-data']
+                'f32c1d9e6352644a5894305ecb478b0d': [['ed-data'], ['object-detection-data'], ['ed-data'], ['wm-data']]
             }
         }
 
