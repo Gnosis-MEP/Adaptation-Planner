@@ -11,6 +11,3 @@ services:
     build:
       context: '.'
       dockerfile: 'Dockerfile'
-      args:
-        SIT_PYPI_USER_VAR: ${SIT_PYPI_USER}
-        SIT_PYPI_PASS_VAR: ${SIT_PYPI_PASS}
