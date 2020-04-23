@@ -15,6 +15,7 @@ Build Image:
     name: registry.insight-centre.org/sit/kaniko-gitlab:latest
   script: |
     rm -r /root/.docker
+    mkdir -p /kaniko/.docker
     df -h
     echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
     echo "Building with dest: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_NAME}"
