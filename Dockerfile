@@ -1,4 +1,4 @@
-FROM registry.insight-centre.org/sit/mps/docker-images/base-services@sha256:1cc57610ede299e3a30846ee4b24da6ae0b29403d2ae2542fcf6d7d623055a6a
+FROM registry.insight-centre.org/sit/mps/docker-images/base-services:latest
 
 ## install only the service requirements
 ADD ./Pipfile /service/Pipfile
