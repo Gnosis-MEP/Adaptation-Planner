@@ -30,16 +30,25 @@ class AdaptationPlanner(BaseTracerService):
         # do something here
         pass
 
+    def update_for_incorrect_scheduler_plan(self, cause):
+        self.send_plan_to_scheduler(self.scheduler_prepare_plan(cause))
+
+    def plan_for_change_request(self, event_data):
+        change = event_data['change']
+        if change['type'] == 'incorrectSchedulerPlan':
+            self.update_for_incorrect_scheduler_plan(change['cause'])
+
     def process_action(self, action, event_data, json_msg):
         if not super(AdaptationPlanner, self).process_action(action, event_data, json_msg):
             return False
-        if action == 'updateSchedulerMock':
-            self.send_plan_to_scheduler(self.scheduler_prepare_plan())
+        if action == 'changePlanRequest':
+            self.plan_for_change_request(event_data)
 
-    def scheduler_prepare_plan(self):
+    def scheduler_prepare_plan(self, buffer_stream_entity):
+        buffer_stream_key = buffer_stream_entity['gnosis-mep:buffer_stream#buffer_stream_key']
         return {
             'dataflow': {
-                'f32c1d9e6352644a5894305ecb478b0d': [['object-detection-data'], ['wm-data']]
+                buffer_stream_key: [['object-detection-data'], ['wm-data']]
             }
         }
 
