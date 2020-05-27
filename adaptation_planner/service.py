@@ -32,6 +32,10 @@ class AdaptationPlanner(BaseTracerService):
         self.knowledge_cmd_stream = self.stream_factory.create(key=self.knowledge_cmd_stream_key, stype='streamOnly')
         self.plans_being_planned = {}
 
+        self.services_to_streams = {
+            'object_detection': 'object-detection-data'
+        }
+
     @timer_logger
     def process_data_event(self, event_data, json_msg):
         if not super(AdaptationPlanner, self).process_data_event(event_data, json_msg):
@@ -50,7 +54,7 @@ class AdaptationPlanner(BaseTracerService):
             buffer_stream_plan.append([service_stream])
 
         window_manager_stream = 'wm-data'
-        buffer_stream_plan.extend([window_manager_stream])
+        buffer_stream_plan.append([window_manager_stream])
 
         return {
             'dataflow': {
@@ -62,7 +66,7 @@ class AdaptationPlanner(BaseTracerService):
     def update_plan_on_knoledge(self, plan):
         pass
 
-    def check_ongoing_knowledge_queries_are_done(knowledge_queries):
+    def check_ongoing_knowledge_queries_are_done(self, knowledge_queries):
         for query_ref, query in knowledge_queries.items():
             if query.get('data') is None:
                 return False
@@ -79,11 +83,12 @@ class AdaptationPlanner(BaseTracerService):
 
     def ask_knowledge_for_queries_text_from_ids(self, query_ids):
         # only get first query for now, since there's no diff in geting more than one for the same buffer
-        k_query_text = "SELECT DISTINCT ?o WHERE {?s gnosis-mep:query_text ?o.}"
+        k_query_text = "SELECT DISTINCT ?o WHERE {?s ?p ?o.}"
         query = {
             'query_text': k_query_text,
             'bindings': {
-                's': query_ids[0]
+                's': query_ids[0],
+                'p': 'gnosis-mep:subscriber_query#query'
             },
             'query_ref': self.service_based_random_event_id(),  #for simple internal reference of this query.
         }
@@ -111,13 +116,13 @@ class AdaptationPlanner(BaseTracerService):
             knowledge_query = self.ask_knowledge_for_queries_text_from_ids(query_ids)
 
             plan['stage'] = self.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES
-            knowledge_queries = plan.getdefault('ongoing_knowledge_queries', {})
+            knowledge_queries = plan.setdefault('ongoing_knowledge_queries', {})
             query_ref = knowledge_query['query_ref']
             knowledge_queries[query_ref] = knowledge_query
 
         elif plan['stage'] == self.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:
             if self.check_ongoing_knowledge_queries_are_done(plan.get('ongoing_knowledge_queries', {})):
-                k_response = self.plan['ongoing_knowledge_queries'][0]['response']
+                k_response = list(plan['ongoing_knowledge_queries'].values())[0].get('data', [])
                 query_text_list = [t[0] for t in k_response]
 
                 required_services = self.get_queries_required_services(query_text_list)
@@ -152,7 +157,7 @@ class AdaptationPlanner(BaseTracerService):
                 continue
             else:
                 ongoing_query = plan_ongoing_queries[query_ref]
-                ongoing_query['data'] = query['data']
+                ongoing_query['data'] = query_data
                 self.update_plan(plan=plan)
 
     def process_action(self, action, event_data, json_msg):
@@ -163,7 +168,7 @@ class AdaptationPlanner(BaseTracerService):
         elif action == 'answerQueryKnowledge':
             query = event_data['query']
             query_data = event_data['data']
-            self.update_plans_queries(query, query_data)
+            self.update_plans_from_queries_result(query, query_data)
 
     def prepare_plan(self, plan=None):
         if plan is None:
@@ -184,7 +189,7 @@ class AdaptationPlanner(BaseTracerService):
             'action': 'executeAdaptivePlan',
         }
         new_event_data.update(adaptive_plan)
-
+        self.logger.debug(f'Sending event "{new_event_data}" to Scheduler')
         # another hacky hack. hardcoding the stream key for the scheduler
         self.write_event_with_trace(new_event_data, self.get_destination_streams('sc-cmd'))
 
