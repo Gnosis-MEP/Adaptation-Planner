@@ -4,6 +4,8 @@ from event_service_utils.logging.decorators import timer_logger
 from event_service_utils.services.tracer import BaseTracerService
 from event_service_utils.tracing.jaeger import init_tracer
 
+from adaptation_planner.planners.scheduling import SchedulerPlanner
+
 
 class AdaptationPlanner(BaseTracerService):
 
@@ -30,38 +32,17 @@ class AdaptationPlanner(BaseTracerService):
         self.data_validation_fields = ['id']
         self.knowledge_cmd_stream_key = 'adpk-cmd'
         self.knowledge_cmd_stream = self.stream_factory.create(key=self.knowledge_cmd_stream_key, stype='streamOnly')
+
         self.plans_being_planned = {}
 
-        self.services_to_streams = {
-            'object_detection': 'object-detection-data'
-        }
+        scheduler_cmd_stream_key = 'sc-cmd'
+        ce_endpoint_stream_key = 'wm-data'
+        self.scheduler_planner = SchedulerPlanner(self, scheduler_cmd_stream_key, ce_endpoint_stream_key)
 
     @timer_logger
     def process_data_event(self, event_data, json_msg):
         if not super(AdaptationPlanner, self).process_data_event(event_data, json_msg):
             return False
-
-    def get_queries_required_services(self, query_text_list):
-        required_services = []
-        if any(['object_detection' in query_text.lower() for query_text in query_text_list]):
-            required_services.append('object_detection')
-        return required_services
-
-    def build_buffer_stream_plan_from_required_services(self, buffer_stream_key, required_services):
-        buffer_stream_plan = []
-        for service in required_services:
-            service_stream = self.services_to_streams[service]
-            buffer_stream_plan.append([service_stream])
-
-        window_manager_stream = 'wm-data'
-        buffer_stream_plan.append([window_manager_stream])
-
-        return {
-            'dataflow': {
-                # buffer_stream_key: [['object-detection-data'], ['wm-data']]
-                buffer_stream_key: buffer_stream_plan,
-            }
-        }
 
     def update_plan_on_knoledge(self, plan):
         pass
@@ -81,69 +62,12 @@ class AdaptationPlanner(BaseTracerService):
         }
         self.write_event_with_trace(new_event_data, self.knowledge_cmd_stream)
 
-    def ask_knowledge_for_queries_text_from_ids(self, query_ids):
-        # only get first query for now, since there's no diff in geting more than one for the same buffer
-        k_query_text = "SELECT DISTINCT ?o WHERE {?s ?p ?o.}"
-        query = {
-            'query_text': k_query_text,
-            'bindings': {
-                's': query_ids[0],
-                'p': 'gnosis-mep:subscriber_query#query'
-            },
-            'query_ref': self.service_based_random_event_id(),  #for simple internal reference of this query.
-        }
-        self.query_knowledge(query)
-        return query
-
-    def plan_for_incorrect_scheduler_plan(self, change_request=None, plan=None):
-        if plan is None:
-            plan = {}
-            plan.update({
-                'type': 'correctSchedulerPlan',
-                'execution_plan': None,
-                'executor': 'sc-cmd',
-                'change_request': change_request
-            })
-            plan = self.prepare_plan(plan)
-
-        if change_request is None:
-            change_request = plan['change_request']
-
-        cause = change_request['cause']
-        buffer_stream_entity = cause
-        if plan['stage'] == self.PLAN_STAGE_PREPARATION_START:
-            query_ids = buffer_stream_entity['gnosis-mep:buffer_stream#query_ids']
-            knowledge_query = self.ask_knowledge_for_queries_text_from_ids(query_ids)
-
-            plan['stage'] = self.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES
-            knowledge_queries = plan.setdefault('ongoing_knowledge_queries', {})
-            query_ref = knowledge_query['query_ref']
-            knowledge_queries[query_ref] = knowledge_query
-
-        elif plan['stage'] == self.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:
-            if self.check_ongoing_knowledge_queries_are_done(plan.get('ongoing_knowledge_queries', {})):
-                k_response = list(plan['ongoing_knowledge_queries'].values())[0].get('data', [])
-                query_text_list = [t[0] for t in k_response]
-
-                required_services = self.get_queries_required_services(query_text_list)
-                buffer_stream_key = buffer_stream_entity['gnosis-mep:buffer_stream#buffer_stream_key']
-                buffer_stream_plan = self.build_buffer_stream_plan_from_required_services(
-                    buffer_stream_key, required_services)
-
-                plan['execution_plan'] = buffer_stream_plan
-                plan['stage'] = self.PLAN_STAGE_IN_EXECUTION
-                self.send_plan_to_scheduler(buffer_stream_plan)
-            else:
-                pass
-        self.update_plan_on_knoledge(plan)
-        return plan
-
     def update_plan(self, change_request=None, plan=None):
         if change_request is None:
             change_request = plan['change_request']
 
         if change_request['type'] == 'incorrectSchedulerPlan':
-            self.plan_for_incorrect_scheduler_plan(change_request, plan=plan)
+            self.scheduler_planner.plan(change_request, plan=plan)
 
     def plan_for_change_request(self, event_data):
         change_request = event_data['change']
@@ -183,22 +107,13 @@ class AdaptationPlanner(BaseTracerService):
     def get_destination_streams(self, destination):
         return self.stream_factory.create(destination, stype='streamOnly')
 
-    def send_plan_to_scheduler(self, adaptive_plan):
-        new_event_data = {
-            'id': self.service_based_random_event_id(),
-            'action': 'executeAdaptivePlan',
-        }
-        new_event_data.update(adaptive_plan)
-        self.logger.debug(f'Sending event "{new_event_data}" to Scheduler')
-        # another hacky hack. hardcoding the stream key for the scheduler
-        self.write_event_with_trace(new_event_data, self.get_destination_streams('sc-cmd'))
-
     def log_state(self):
         super(AdaptationPlanner, self).log_state()
-        self.logger.info(f'My service name is: {self.name}')
+        self._log_dict('Plans being Planned:', self.plans_being_planned)
 
     def run(self):
         super(AdaptationPlanner, self).run()
+        self.log_state()
         self.cmd_thread = threading.Thread(target=self.run_forever, args=(self.process_cmd,))
         self.data_thread = threading.Thread(target=self.run_forever, args=(self.process_data,))
         self.cmd_thread.start()
