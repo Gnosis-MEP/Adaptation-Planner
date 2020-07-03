@@ -97,7 +97,7 @@ class AdaptationPlanner(BaseTracerService):
     def prepare_plan(self, plan=None):
         if plan is None:
             plan = {}
-        plan_id = '123'
+        plan_id = self.service_based_random_event_id()
         plan['id'] = plan_id
         plan['stage'] = self.PLAN_STAGE_PREPARATION_START
         plan['ongoing_knowledge_queries'] = {}
