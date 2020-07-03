@@ -4,7 +4,7 @@ from event_service_utils.logging.decorators import timer_logger
 from event_service_utils.services.tracer import BaseTracerService
 from event_service_utils.tracing.jaeger import init_tracer
 
-from adaptation_planner.planners.scheduling import SchedulerPlanner
+from adaptation_planner.planners.scheduling import SchedulerPlanner, MaxEnergyForQueueLimitSchedulerPlanner
 
 
 class AdaptationPlanner(BaseTracerService):
@@ -37,7 +37,9 @@ class AdaptationPlanner(BaseTracerService):
 
         scheduler_cmd_stream_key = 'sc-cmd'
         ce_endpoint_stream_key = 'wm-data'
-        self.scheduler_planner = SchedulerPlanner(self, scheduler_cmd_stream_key, ce_endpoint_stream_key)
+        self.scheduler_planner = SchedulerPlanner(
+            self, scheduler_cmd_stream_key, ce_endpoint_stream_key
+        )
 
     @timer_logger
     def process_data_event(self, event_data, json_msg):
@@ -66,8 +68,13 @@ class AdaptationPlanner(BaseTracerService):
         if change_request is None:
             change_request = plan['change_request']
 
+        changed = False
         if change_request['type'] == 'incorrectSchedulerPlan':
             self.scheduler_planner.plan(change_request, plan=plan)
+            changed = True
+
+        if changed:
+            self.update_plan_on_knoledge(plan)
 
     def plan_for_change_request(self, event_data):
         change_request = event_data['change']

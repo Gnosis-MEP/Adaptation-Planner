@@ -187,27 +187,26 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
     #         else:
     #             continue
 
+
     # ----------------mocked since we don't have this yet
     def get_query_required_services(self, query):
-        services = [('object_detection', 'Object Detection')]
+        services = [('object_detection', 'ObjectDetection')]
 
         required_services = []
         for service in services:
-            if services[0] in query['query_text'].lower():
+            if service[0] in query['query_text'].lower():
                 required_services.append(service[1])
 
         return required_services
 
-    def mocked_preparation_stage(self, cause, plan):
-        """Pretending this info was received by queries from the k and
-        formated into this structure
-        """
+    def mocked_buffer_streams(self):
         self.all_buffer_streams = {
-            'buffer_stream_key': {
-                'query_ids': [],
+            'f32c1d9e6352644a5894305ecb478b0d': {
+                'query_ids': ['f860ba666ed657944d19ca051e58cd2c'],
                 'queries': {
-                    'id': '',
-                    'query_text': ''
+                    'f860ba666ed657944d19ca051e58cd2c': {
+                        'query_text': 'select object_detection from publisher1 where (object1.label = car) within TUMBLING_COUNT_WINDOW(4) withconfidence >50'
+                    }
                 }
             }
         }
@@ -215,52 +214,95 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
 
         }
 
+    def mocked_services(self):
         self.all_services_worker_pool = {
             'ObjectDetection': {
-                'w1': {
+                'od-yolo-data': {
                     'resources': {
                         'usage': {
-                            'energy_consumption': 10,
-                            'time': 2,
+                            'energy_consumption': 20,
+                            'time': 1,
                         },
                         'planned': {
-                            'queue_space': 5,
+                            'queue_space': 30,
                         }
                     },
                     'monitoring': {
-                        'queue_space': 5,
-                        'queue_space_percent': 0.05,
+                        'queue_space': 30,
+                        'queue_space_percent': 0.30,
                         'queue_limit': 100
                     },
                 },
-                'w2': {
+                'od-ssd-data': {
                     'resources': {
                         'usage': {
                             'energy_consumption': 10,
-                            'time': 2,
+                            'time': 1,
                         },
                         'planned': {
-                            'queue_space': 5,
+                            'queue_space': 35,
                         }
                     },
                     'monitoring': {
-                        'queue_space': 5,
-                        'queue_space_percent': 0.05,
+                        'queue_space': 35,
+                        'queue_space_percent': 0.35,
+                        'queue_limit': 100
+                    },
+                },
+                'od-ssdrt-data': {
+                    'resources': {
+                        'usage': {
+                            'energy_consumption': 6,
+                            'time': 1,
+                        },
+                        'planned': {
+                            'queue_space': 25,
+                        }
+                    },
+                    'monitoring': {
+                        'queue_space': 25,
+                        'queue_space_percent': 0.25,
                         'queue_limit': 100
                     },
                 },
             },
         }
 
-        self.plan_stage_waiting_knowledge_queries(cause, plan)
+    def mocked_preparation_stage(self, cause, plan):
+        """Pretending this info was received by queries from the k and
+        formated into this structure
+        """
+        self.mocked_buffer_streams()
+        self.mocked_services()
+
+        return self.plan_stage_waiting_knowledge_queries(cause, plan)
     # ----------------end of mocked
 
+    def ask_knowledge_for_all_entities_of_namespace(self, namespace):
+        k_query_text = """
+        SELECT DISTINCT ?s ?p ?o
+            WHERE {
+                ?s ?p ?o.
+                ?s rdf:type ?t.
+            }
+        """
+        query = {
+            'query_text': k_query_text,
+            'bindings': {
+                't': namespace,  # 'gnosis-mep:buffer_stream'
+            },
+            #for simple internal reference of this query.
+            'query_ref': f'{self.parent_service.service_based_random_event_id()}-{namespace}',
+        }
+        self.parent_service.query_knowledge(query)
+        return query
+
     def calculate_worker_queue_space_percentage(self, worker):
-        return worker['resource']['planned']['queue_space'] / worker['monitoring']['queue_limit']
+        return worker['resources']['planned']['queue_space'] / worker['monitoring']['queue_limit']
 
     def get_non_floaded_queue_workers(self, worker_pool, min_queue_space_percent):
         return dict(filter(
-            lambda x: self.calculate_worker_queue_space_percentage(x[1]) > min_queue_space_percent, worker_pool.items()
+            lambda x: self.calculate_worker_queue_space_percentage(x[1]) >= min_queue_space_percent, worker_pool.items()
         ))
 
     # def workers_sorted_by_best_energy_consumption(self, worker_pool):
@@ -275,14 +317,14 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
 
     def workers_keys_sorted_by_best_energy_consumption(self, worker_pool):
         sorted_workers = sorted(
-            worker_pool.keys(), key=lambda w_key: worker_pool[w_key]['resource_usage']['energy_consumption']
+            worker_pool.keys(), key=lambda w_key: worker_pool[w_key]['resources']['usage']['energy_consumption']
         )
 
         return sorted_workers
 
     def update_worker_planned_resource(self, worker, min_queue_space_percent):
-        planned_usage = worker['monitoring']['queue_limit'] * (min_queue_space_percent)
-        worker['resource']['planned']['queue_space'] -= planned_usage
+        planned_usage = int(worker['monitoring']['queue_limit'] * (min_queue_space_percent))
+        worker['resources']['planned']['queue_space'] -= planned_usage
         return worker
 
     def get_buffer_stream_required_services(self, buffer_stream_entity):
@@ -299,14 +341,15 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         buffer_stream_plan = []
         for service in required_services:
             worker_pool = self.all_services_worker_pool[service]
-            non_floaded_worker_pool = self.get_non_floaded_queue_workers_or_all(worker_pool, min_queue_space_percent)
+            non_floaded_worker_pool = self.get_non_floaded_queue_workers(worker_pool, min_queue_space_percent)
             if len(worker_pool) == 0:
-                best_worker = random.choice(list(worker_pool.keys()))
-
-            energy_sorted_workers_keys = self.workers_sorted_by_best_energy_consumption(non_floaded_worker_pool)
+                best_worker_key = random.choice(list(worker_pool.keys()))
+            energy_sorted_workers_keys = self.workers_keys_sorted_by_best_energy_consumption(non_floaded_worker_pool)
             best_worker_key = energy_sorted_workers_keys[0]
             buffer_stream_plan.append([best_worker_key])
-            worker_pool[best_worker] = self.update_worker_planned_resource(worker_pool[best_worker])
+            worker_pool[best_worker_key] = self.update_worker_planned_resource(
+                worker_pool[best_worker_key], min_queue_space_percent
+            )
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
         return buffer_stream_plan
 
@@ -314,7 +357,6 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         scheduling_dataflow_plan = {}
         for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
             buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
-            buffer_stream_key = buffer_stream_entity['gnosis-mep:buffer_stream#buffer_stream_key']
             scheduling_dataflow_plan[buffer_stream_key] = buffer_stream_plan
 
         return {
@@ -322,18 +364,17 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         }
 
     def plan_stage_preparation_start(self, cause, plan):
+        plan['stage'] = self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES
         ongoing_knowledge_queries = plan.setdefault('ongoing_knowledge_queries', {})
 
-        buffers_knowledge_query = self.ask_knowledge_for_buffer_stream_entities()
+        buffers_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:buffer_stream')
         ongoing_knowledge_queries[buffers_knowledge_query['query_ref']] = buffers_knowledge_query
 
-        queries_knowledge_query = self.ask_knowledge_for_queries_entities()
+        queries_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:subscriber_query')
         ongoing_knowledge_queries[queries_knowledge_query['query_ref']] = queries_knowledge_query
 
-        services_knowledge_query = self.ask_knowledge_for_services_entities()
+        services_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:service')
         ongoing_knowledge_queries[services_knowledge_query['query_ref']] = services_knowledge_query
-
-        plan['stage'] = self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES
         return plan
 
     def prepare_local_buffer_stream_entities(self, knowledge_queries):
@@ -342,11 +383,11 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
     def prepare_local_services_with_workers(self, knowledge_queries):
         self.all_services_worker_pool = {}
 
-    def prepare_data_structures_from_knowledge_queries_data(self, plan):
-        is_mocked = len(plan['ongoing_knowledge_queries'].keys()) == 0
+    def prepare_data_structures_from_knowledge_queries_data(self, ongoing_knowledge_queries):
+        is_mocked = len(ongoing_knowledge_queries.keys()) == 0
         if not is_mocked:
-            self.prepare_local_buffer_stream_entities(plan['ongoing_knowledge_queries'])
-            self.prepare_local_services_with_workers(plan['ongoing_knowledge_queries'])
+            self.prepare_local_services_with_workers(ongoing_knowledge_queries)
+            self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
 
     def plan_stage_waiting_knowledge_queries(self, cause, plan):
         ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
@@ -387,9 +428,9 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
 
         cause = change_request['cause']
         if plan['stage'] == self.parent_service.PLAN_STAGE_PREPARATION_START:
-            plan = self.plan_stage_preparation_start(cause, plan)
+            plan = self.mocked_preparation_stage(cause, plan)
+            # plan = self.plan_stage_preparation_start(cause, plan)
 
         elif plan['stage'] == self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:
-            plan = self.plan_stage_waiting_kowledge(cause, plan)
-        self.parent_service.update_plan_on_knoledge(plan)
+            plan = self.plan_stage_waiting_knowledge_queries(cause, plan)
         return plan
