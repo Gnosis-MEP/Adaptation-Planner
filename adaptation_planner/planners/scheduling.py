@@ -1,16 +1,15 @@
-import functools
 import random
 
 
 class SchedulerPlanner(object):
-    def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key):
+    def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key, mocked_od_stream_key):
         super(SchedulerPlanner, self).__init__()
         self.parent_service = parent_service
         self.scheduler_cmd_stream = self.parent_service.get_destination_streams(scheduler_cmd_stream_key)
         self.ce_endpoint_stream_key = ce_endpoint_stream_key
 
         self.services_to_streams = {
-            'object_detection': 'object-detection-data'
+            'object_detection': mocked_od_stream_key
         }
 
     #-- Mocked data until we have this info somewere
@@ -44,7 +43,7 @@ class SchedulerPlanner(object):
                 's': query_ids[0],
                 'p': 'gnosis-mep:subscriber_query#query'
             },
-            #for simple internal reference of this query.
+            # for simple internal reference of this query.
             'query_ref': self.parent_service.service_based_random_event_id(),
         }
         self.parent_service.query_knowledge(query)
@@ -187,8 +186,8 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
     #         else:
     #             continue
 
-
     # ----------------mocked since we don't have this yet
+
     def get_query_required_services(self, query):
         services = [('object_detection', 'ObjectDetection')]
 
@@ -211,29 +210,31 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
             }
         }
         self.all_queries = {
-
+            'f860ba666ed657944d19ca051e58cd2c': {
+                'query_text': 'select object_detection from publisher1 where (object1.label = car) within TUMBLING_COUNT_WINDOW(4) withconfidence >50'
+            }
         }
 
     def mocked_services(self):
         self.all_services_worker_pool = {
             'ObjectDetection': {
-                'od-yolo-data': {
-                    'resources': {
-                        'usage': {
-                            'energy_consumption': 20,
-                            'time': 1,
-                        },
-                        'planned': {
-                            'queue_space': 30,
-                        }
-                    },
-                    'monitoring': {
-                        'queue_space': 30,
-                        'queue_space_percent': 0.30,
-                        'queue_limit': 100
-                    },
-                },
-                'od-ssd-data': {
+                # 'od-yolo-data': {
+                #     'resources': {
+                #         'usage': {
+                #             'energy_consumption': 20,
+                #             'time': 1,
+                #         },
+                #         'planned': {
+                #             'queue_space': 30,
+                #         }
+                #     },
+                #     'monitoring': {
+                #         'queue_space': 30,
+                #         'queue_space_percent': 0.30,
+                #         'queue_limit': 100
+                #     },
+                # },
+                'object-detection-ssd-data': {
                     'resources': {
                         'usage': {
                             'energy_consumption': 10,
@@ -249,33 +250,25 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
                         'queue_limit': 100
                     },
                 },
-                'od-ssdrt-data': {
+                'object-detection-ssd-rt-data': {
                     'resources': {
                         'usage': {
                             'energy_consumption': 6,
                             'time': 1,
                         },
                         'planned': {
-                            'queue_space': 25,
+                            'queue_space': 45,
                         }
                     },
                     'monitoring': {
-                        'queue_space': 25,
-                        'queue_space_percent': 0.25,
+                        'queue_space': 45,
+                        'queue_space_percent': 0.45,
                         'queue_limit': 100
                     },
                 },
             },
         }
 
-    def mocked_preparation_stage(self, cause, plan):
-        """Pretending this info was received by queries from the k and
-        formated into this structure
-        """
-        self.mocked_buffer_streams()
-        self.mocked_services()
-
-        return self.plan_stage_waiting_knowledge_queries(cause, plan)
     # ----------------end of mocked
 
     def ask_knowledge_for_all_entities_of_namespace(self, namespace):
@@ -291,7 +284,7 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
             'bindings': {
                 't': namespace,  # 'gnosis-mep:buffer_stream'
             },
-            #for simple internal reference of this query.
+            # for simple internal reference of this query.
             'query_ref': f'{self.parent_service.service_based_random_event_id()}-{namespace}',
         }
         self.parent_service.query_knowledge(query)
@@ -367,27 +360,76 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         plan['stage'] = self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES
         ongoing_knowledge_queries = plan.setdefault('ongoing_knowledge_queries', {})
 
-        buffers_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:buffer_stream')
-        ongoing_knowledge_queries[buffers_knowledge_query['query_ref']] = buffers_knowledge_query
-
         queries_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:subscriber_query')
         ongoing_knowledge_queries[queries_knowledge_query['query_ref']] = queries_knowledge_query
+
+        buffers_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:buffer_stream')
+        ongoing_knowledge_queries[buffers_knowledge_query['query_ref']] = buffers_knowledge_query
 
         services_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:service')
         ongoing_knowledge_queries[services_knowledge_query['query_ref']] = services_knowledge_query
         return plan
 
+    def prepare_local_queries_entities(self, knowledge_queries):
+        # get the query about the subscriber_query
+        query_ref = next(filter(lambda q: 'gnosis-mep:subscriber_query' in q, knowledge_queries))
+        query = knowledge_queries[query_ref]
+        data_triples = query['data']
+
+        for subj, pred, obj in data_triples:
+            query_id = subj.split('/')[-1]
+            attribute = pred.split('#')[-1]
+            value = obj
+            self.all_queries.setdefault(query_id, {})
+            if attribute == 'query':
+                attribute = 'query_text'
+
+            if attribute not in self.all_queries[query_id].keys():
+                self.all_queries[query_id][attribute] = value
+            else:
+                if not isinstance(self.all_queries[query_id][attribute], list):
+                    self.all_queries[query_id][attribute] = [
+                        self.all_queries[query_id][attribute]
+                    ]
+                self.all_queries[query_id][attribute].append(value)
+
     def prepare_local_buffer_stream_entities(self, knowledge_queries):
-        self.all_buffer_streams = {}
+        # get the query about the buffer streams
+        query_ref = next(filter(lambda q: 'gnosis-mep:buffer_stream' in q, knowledge_queries))
+        query = knowledge_queries[query_ref]
+        data_triples = query['data']
+        # subject_sorted_triples = sorted(data_triples, key=lambda t: t[0])
+        # buffer_stream_keys = set([o for s, p, o in subject_sorted_triples if '#buffer_stream_key' in p])
+        buffer_entity_id_stream_key_map = dict(
+            [(s, o) for s, p, o in data_triples if '#buffer_stream_key' in p])
+
+        for subj, pred, obj in data_triples:
+            buffer_stream_key = buffer_entity_id_stream_key_map[subj]
+            attribute = pred.split('#')[-1]
+            value = obj
+            self.all_buffer_streams.setdefault(buffer_stream_key, {})
+            if attribute == 'query_ids':
+                queries = self.all_buffer_streams[buffer_stream_key].setdefault('queries', {})
+                query_id = value.split('/')[-1]
+                queries[query_id] = self.all_queries[query_id]
+                continue
+
+            if attribute not in self.all_buffer_streams[buffer_stream_key].keys():
+                self.all_buffer_streams[buffer_stream_key][attribute] = value
+            else:
+                if not isinstance(self.all_buffer_streams[buffer_stream_key][attribute], list):
+                    self.all_buffer_streams[buffer_stream_key][attribute] = [
+                        self.all_buffer_streams[buffer_stream_key][attribute]
+                    ]
+                self.all_buffer_streams[buffer_stream_key][attribute].append(value)
 
     def prepare_local_services_with_workers(self, knowledge_queries):
-        self.all_services_worker_pool = {}
+        self.mocked_services()
 
     def prepare_data_structures_from_knowledge_queries_data(self, ongoing_knowledge_queries):
-        is_mocked = len(ongoing_knowledge_queries.keys()) == 0
-        if not is_mocked:
-            self.prepare_local_services_with_workers(ongoing_knowledge_queries)
-            self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
+        self.prepare_local_queries_entities(ongoing_knowledge_queries)
+        self.prepare_local_services_with_workers(ongoing_knowledge_queries)
+        self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
 
     def plan_stage_waiting_knowledge_queries(self, cause, plan):
         ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
@@ -428,8 +470,8 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
 
         cause = change_request['cause']
         if plan['stage'] == self.parent_service.PLAN_STAGE_PREPARATION_START:
-            plan = self.mocked_preparation_stage(cause, plan)
-            # plan = self.plan_stage_preparation_start(cause, plan)
+            # plan = self.mocked_preparation_stage(cause, plan)
+            plan = self.plan_stage_preparation_start(cause, plan)
 
         elif plan['stage'] == self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:
             plan = self.plan_stage_waiting_knowledge_queries(cause, plan)

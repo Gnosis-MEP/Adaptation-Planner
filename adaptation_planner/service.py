@@ -6,6 +6,8 @@ from event_service_utils.tracing.jaeger import init_tracer
 
 from adaptation_planner.planners.scheduling import SchedulerPlanner, MaxEnergyForQueueLimitSchedulerPlanner
 
+from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
+
 
 class AdaptationPlanner(BaseTracerService):
 
@@ -38,7 +40,8 @@ class AdaptationPlanner(BaseTracerService):
         scheduler_cmd_stream_key = 'sc-cmd'
         ce_endpoint_stream_key = 'wm-data'
         self.scheduler_planner = SchedulerPlanner(
-            self, scheduler_cmd_stream_key, ce_endpoint_stream_key
+            self, scheduler_cmd_stream_key, ce_endpoint_stream_key,
+            mocked_od_stream_key=MOCKED_OD_STREAM_KEY
         )
 
     @timer_logger

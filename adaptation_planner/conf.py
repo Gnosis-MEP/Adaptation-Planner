@@ -11,6 +11,8 @@ REDIS_PORT = config('REDIS_PORT', default='6379')
 TRACER_REPORTING_HOST = config('TRACER_REPORTING_HOST', default='localhost')
 TRACER_REPORTING_PORT = config('TRACER_REPORTING_PORT', default='6831')
 
+MOCKED_OD_STREAM_KEY = config('MOCKED_OD_STREAM_KEY', default='object-detection-data')
+
 SERVICE_STREAM_KEY = config('SERVICE_STREAM_KEY')
 SERVICE_CMD_KEY = config('SERVICE_CMD_KEY')
 
