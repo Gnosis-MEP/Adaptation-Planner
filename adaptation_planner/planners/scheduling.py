@@ -125,67 +125,6 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         self.all_buffer_streams = {}
         self.all_queries = {}
 
-        # self.workers = {
-        #     'ObjectDetection': {
-        #         'w1': {
-        #             'resources': {
-        #                 'usage': {
-        #                     'energy_consumption': 10,
-        #                     'time': 2,
-        #                 },
-        #                 'planned': {
-        #                     'queue_space': 5,
-        #                 }
-        #             },
-        #             'monitoring': {
-        #                 'queue_space': 5,
-        #                 'queue_space_percent': 0.05,
-        #                 'queue_limit': 100
-        #             },
-        #         },
-        #         'w2': {
-        #             'resources': {
-        #                 'usage': {
-        #                     'energy_consumption': 10,
-        #                     'time': 2,
-        #                 },
-        #                 'planned': {
-        #                     'queue_space': 5,
-        #                 }
-        #             },
-        #             'monitoring': {
-        #                 'queue_space': 5,
-        #                 'queue_space_percent': 0.05,
-        #                 'queue_limit': 100
-        #             },
-        #         },
-        #     },
-        # }
-
-    # def _check_worker_resource_is_fits_query_constraints(self, resource, constraint_function, worker_key_val):
-    #     worker_dict = worker_key_val[1]
-    #     worker_resource_usage = worker_dict['resource_usage'][resource]
-    #     return constraint_function(worker_resource_usage)
-
-    # def get_query_resource_contrained_workers(self, worker_pool, query_resource_constraints):
-    #     resource_bounded_workers = worker_pool
-    #     for resource, contraint_function in query_resource_constraints:
-    #         filter_resource_worker_function = functools.partial(
-    #             self._check_worker_resource_is_fits_query_constraints, resource, contraint_function
-    #         )
-
-    #         # filter out workers that are not within the this query resource constraint
-    #         next_resource_bounded_workers = dict(
-    #             filter(filter_resource_worker_function, resource_bounded_workers.items())
-    #         )
-
-    #         # if there is at least a worker... then keepgoing,
-    #         # othersise, just ignore this resource constraint, since there's not much else to do
-    #         if next_resource_bounded_workers:
-    #             resource_bounded_workers = next_resource_bounded_workers
-    #         else:
-    #             continue
-
     # ----------------mocked since we don't have this yet
 
     def get_query_required_services(self, query):
@@ -234,10 +173,10 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
                 #         'queue_limit': 100
                 #     },
                 # },
-                'object-detection-ssd-data': {
+                'object-detection-ssd-gpu-data': {
                     'resources': {
                         'usage': {
-                            'energy_consumption': 10,
+                            'energy_consumption': 6,
                             'time': 1,
                         },
                         'planned': {
@@ -250,10 +189,10 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
                         'queue_limit': 100
                     },
                 },
-                'object-detection-ssd-rt-data': {
+                'object-detection-ssd-data': {
                     'resources': {
                         'usage': {
-                            'energy_consumption': 6,
+                            'energy_consumption': 10,
                             'time': 1,
                         },
                         'planned': {
