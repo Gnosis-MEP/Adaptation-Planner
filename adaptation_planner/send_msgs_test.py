@@ -23,8 +23,12 @@ def new_action_msg(action, event_data):
 
 def send_action_msgs(service_cmd):
     msg_1 = new_action_msg(
-        'updateSchedulerMock',
+        'changePlanRequest',
         {
+            'change': {
+                'type': 'serviceWorkerOverloaded',
+                'cause': {}
+            }
         }
     )
     # msg_2 = new_action_msg(

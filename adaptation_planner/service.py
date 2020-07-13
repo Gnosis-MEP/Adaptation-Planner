@@ -36,12 +36,13 @@ class AdaptationPlanner(BaseTracerService):
         self.knowledge_cmd_stream = self.stream_factory.create(key=self.knowledge_cmd_stream_key, stype='streamOnly')
 
         self.plans_being_planned = {}
+        self.last_executed = {}
 
         scheduler_cmd_stream_key = 'sc-cmd'
         ce_endpoint_stream_key = 'wm-data'
-        self.scheduler_planner = SchedulerPlanner(
+        self.scheduler_planner = MaxEnergyForQueueLimitSchedulerPlanner(
             self, scheduler_cmd_stream_key, ce_endpoint_stream_key,
-            mocked_od_stream_key=MOCKED_OD_STREAM_KEY
+            # mocked_od_stream_key=MOCKED_OD_STREAM_KEY
         )
 
     @timer_logger
@@ -73,6 +74,10 @@ class AdaptationPlanner(BaseTracerService):
 
         changed = False
         if change_request['type'] == 'incorrectSchedulerPlan':
+            self.scheduler_planner.plan(change_request, plan=plan)
+            changed = True
+
+        if change_request['type'] == 'serviceWorkerOverloaded':
             self.scheduler_planner.plan(change_request, plan=plan)
             changed = True
 
@@ -119,7 +124,8 @@ class AdaptationPlanner(BaseTracerService):
 
     def log_state(self):
         super(AdaptationPlanner, self).log_state()
-        self._log_dict('Plans being Planned:', self.plans_being_planned)
+        # self._log_dict('Plans being Planned:', self.plans_being_planned)
+        self._log_dict('Last plan executed:', self.last_executed)
 
     def run(self):
         super(AdaptationPlanner, self).run()

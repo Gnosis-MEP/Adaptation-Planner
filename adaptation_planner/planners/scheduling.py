@@ -180,14 +180,14 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
                             'time': 1,
                         },
                         'planned': {
-                            'queue_space': 35,
+                        #     'queue_space': 35,
                         }
                     },
-                    'monitoring': {
-                        'queue_space': 35,
-                        'queue_space_percent': 0.35,
-                        'queue_limit': 100
-                    },
+                    # 'monitoring': {
+                    #     'queue_space': 35,
+                    #     'queue_space_percent': 0.35,
+                    #     'queue_limit': 100
+                    # },
                 },
                 'object-detection-ssd-data': {
                     'resources': {
@@ -196,14 +196,14 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
                             'time': 1,
                         },
                         'planned': {
-                            'queue_space': 45,
+                        #     'queue_space': 45,
                         }
                     },
-                    'monitoring': {
-                        'queue_space': 45,
-                        'queue_space_percent': 0.45,
-                        'queue_limit': 100
-                    },
+                    # 'monitoring': {
+                    #     'queue_space': 45,
+                    #     'queue_space_percent': 0.45,
+                    #     'queue_limit': 100
+                    # },
                 },
             },
         }
@@ -305,7 +305,7 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         buffers_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:buffer_stream')
         ongoing_knowledge_queries[buffers_knowledge_query['query_ref']] = buffers_knowledge_query
 
-        services_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:service')
+        services_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:service_worker')
         ongoing_knowledge_queries[services_knowledge_query['query_ref']] = services_knowledge_query
         return plan
 
@@ -364,8 +364,38 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
 
     def prepare_local_services_with_workers(self, knowledge_queries):
         self.mocked_services()
+        query_ref = next(filter(lambda q: 'gnosis-mep:service_worker' in q, knowledge_queries))
+        query = knowledge_queries[query_ref]
+        data_triples = query['data']
+        workers = {}
+        for subj, pred, obj in data_triples:
+            worker_id = subj.split('/')[-1]
+            attribute = pred.split('#')[-1]
+            value = obj
+            if attribute in ['queue_space', 'queue_limit']:
+                value = int(value)
+            elif attribute in ['queue_space_percent']:
+                value = float(value)
+
+            worker_monitoring_dict = workers.setdefault(worker_id, {})
+            if attribute == 'service_type':
+                service_dict = self.all_services_worker_pool.setdefault(value, {})
+                service_worker_dict = service_dict.setdefault(worker_id, {})
+                service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
+                service_worker_dict_resources = service_worker_dict.setdefault('resources', {'planned': {}})
+                service_worker_dict_monitoring.update(worker_monitoring_dict)
+                print(f'{worker_id}')
+                service_worker_dict_resources['planned']['queue_space'] = service_worker_dict_monitoring['queue_space']
+            else:
+                worker_monitoring_dict[attribute] = value
+        # for worker_id, worker in workers.items():
+        #     service_type = worker['service_type']
+        #     service_dict[worker_id] = worker
 
     def prepare_data_structures_from_knowledge_queries_data(self, ongoing_knowledge_queries):
+        self.all_queries = {}
+        self.all_buffer_streams = {}
+        self.all_services_worker_pool = {}
         self.prepare_local_queries_entities(ongoing_knowledge_queries)
         self.prepare_local_services_with_workers(ongoing_knowledge_queries)
         self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
@@ -378,6 +408,8 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
             execution_plan = self.create_scheduling_plan()
             plan['execution_plan'] = execution_plan
             plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
+            self.parent_service.last_executed = plan
+
             self.send_plan_to_scheduler(execution_plan)
         else:
             pass
