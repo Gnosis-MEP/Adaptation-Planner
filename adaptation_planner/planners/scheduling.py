@@ -441,7 +441,6 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
 
         cause = change_request['cause']
         if plan['stage'] == self.parent_service.PLAN_STAGE_PREPARATION_START:
-            # plan = self.mocked_preparation_stage(cause, plan)
             plan = self.plan_stage_preparation_start(cause, plan)
 
         elif plan['stage'] == self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:

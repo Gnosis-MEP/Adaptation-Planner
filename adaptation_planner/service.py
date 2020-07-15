@@ -38,10 +38,10 @@ class AdaptationPlanner(BaseTracerService):
         self.plans_being_planned = {}
         self.last_executed = {}
 
-        scheduler_cmd_stream_key = 'sc-cmd'
-        ce_endpoint_stream_key = 'wm-data'
+        self.scheduler_cmd_stream_key = 'sc-cmd'
+        self.ce_endpoint_stream_key = 'wm-data'
         self.scheduler_planner = MaxEnergyForQueueLimitSchedulerPlanner(
-            self, scheduler_cmd_stream_key, ce_endpoint_stream_key,
+            self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
             # mocked_od_stream_key=MOCKED_OD_STREAM_KEY
         )
 
