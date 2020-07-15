@@ -238,6 +238,7 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
                 worker_pool[best_worker_key], min_queue_space_percent
             )
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
+        # return [['object-detection-ssd-gpu-data'], ['wm-data']]
         return buffer_stream_plan
 
     def create_scheduling_plan(self):
