@@ -154,61 +154,16 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
             }
         }
 
-    def mocked_services(self):
-        self.all_services_worker_pool = {
-            'ObjectDetection': {
-                # 'od-yolo-data': {
-                #     'resources': {
-                #         'usage': {
-                #             'energy_consumption': 20,
-                #             'time': 1,
-                #         },
-                #         'planned': {
-                #             'queue_space': 30,
-                #         }
-                #     },
-                #     'monitoring': {
-                #         'queue_space': 30,
-                #         'queue_space_percent': 0.30,
-                #         'queue_limit': 100
-                #     },
-                # },
-                'object-detection-ssd-gpu-data': {
-                    'resources': {
-                        'usage': {
-                            'energy_consumption': 6,
-                            'time': 1,
-                        },
-                        'planned': {
-                        #     'queue_space': 35,
-                        }
-                    },
-                    # 'monitoring': {
-                    #     'queue_space': 35,
-                    #     'queue_space_percent': 0.35,
-                    #     'queue_limit': 100
-                    # },
-                },
-                'object-detection-ssd-data': {
-                    'resources': {
-                        'usage': {
-                            'energy_consumption': 10,
-                            'time': 1,
-                        },
-                        'planned': {
-                        #     'queue_space': 45,
-                        }
-                    },
-                    # 'monitoring': {
-                    #     'queue_space': 45,
-                    #     'queue_space_percent': 0.45,
-                    #     'queue_limit': 100
-                    # },
-                },
-            },
-        }
+    def mocked_services_resources_usage(self):
 
-    # ----------------end of mocked
+        self.all_services_worker_pool['ObjectDetection']['object-detection-ssd-gpu-data']['resources']['usage'] = {
+            'energy_consumption': 6,
+            'time': 1,
+        }
+        self.all_services_worker_pool['ObjectDetection']['object-detection-ssd-data']['resources']['usage'] = {
+            'energy_consumption': 10,
+            'time': 1,
+        }
 
     def ask_knowledge_for_all_entities_of_namespace(self, namespace):
         k_query_text = """
@@ -363,7 +318,6 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
                 self.all_buffer_streams[buffer_stream_key][attribute].append(value)
 
     def prepare_local_services_with_workers(self, knowledge_queries):
-        self.mocked_services()
         query_ref = next(filter(lambda q: 'gnosis-mep:service_worker' in q, knowledge_queries))
         query = knowledge_queries[query_ref]
         data_triples = query['data']
@@ -378,16 +332,27 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
                 value = float(value)
 
             worker_monitoring_dict = workers.setdefault(worker_id, {})
-            if attribute == 'service_type':
-                service_dict = self.all_services_worker_pool.setdefault(value, {})
-                service_worker_dict = service_dict.setdefault(worker_id, {})
-                service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
-                service_worker_dict_resources = service_worker_dict.setdefault('resources', {'planned': {}})
-                service_worker_dict_monitoring.update(worker_monitoring_dict)
-                print(f'{worker_id}')
-                service_worker_dict_resources['planned']['queue_space'] = service_worker_dict_monitoring['queue_space']
-            else:
-                worker_monitoring_dict[attribute] = value
+            # if attribute == 'service_type':
+            #     service_dict = self.all_services_worker_pool.setdefault(value, {})
+            #     service_worker_dict = service_dict.setdefault(worker_id, {})
+            #     service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
+            #     service_worker_dict_monitoring.update(worker_monitoring_dict)
+            #     # print(subj, pred, obj)
+            #     # print(service_worker_dict_monitoring)
+            # else:
+            worker_monitoring_dict[attribute] = value
+
+        for worker_id, worker_monitoring_dict in workers.items():
+            service_type = worker_monitoring_dict['service_type']
+            service_dict = self.all_services_worker_pool.setdefault(service_type, {})
+
+            service_worker_dict = service_dict.setdefault(worker_id, {})
+            service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
+            service_worker_dict_monitoring.update(worker_monitoring_dict)
+            service_worker_dict_resources = service_worker_dict.setdefault('resources', {'planned': {}})
+            service_worker_dict_resources['planned']['queue_space'] = service_worker_dict_monitoring['queue_space']
+        self.mocked_services_resources_usage()
+
         # for worker_id, worker in workers.items():
         #     service_type = worker['service_type']
         #     service_dict[worker_id] = worker
@@ -409,7 +374,6 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
             plan['execution_plan'] = execution_plan
             plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
             self.parent_service.last_executed = plan
-
             self.send_plan_to_scheduler(execution_plan)
         else:
             pass

@@ -126,6 +126,7 @@ class AdaptationPlanner(BaseTracerService):
         super(AdaptationPlanner, self).log_state()
         # self._log_dict('Plans being Planned:', self.plans_being_planned)
         self._log_dict('Last plan executed:', self.last_executed)
+        self.logger.info(f'Last execution_plan: {self.last_executed.get("execution_plan", {})}')
 
     def run(self):
         super(AdaptationPlanner, self).run()

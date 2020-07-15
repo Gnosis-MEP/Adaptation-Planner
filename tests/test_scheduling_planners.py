@@ -189,5 +189,295 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
         self.assertDictEqual(ret_plan['ongoing_knowledge_queries'], {})
         self.assertEqual(ret_plan['execution_plan'], execution_plan)
 
-        # expected_ongoing_queries = {q['query_ref']: q for q in ongoing_queries}
-        # self.assertDictEqual(ret_plan['ongoing_knowledge_queries'], expected_ongoing_queries)
+    def test_prepare_local_services_with_workers(self):
+        ongoing_knowledge_queries = {
+            'AdaptationPlanner:aecf0760-bf47-4ae0-b0df-08b435954146-gnosis-mep:service_worker': {
+                "query": {
+                    "query_ref": "AdaptationPlanner:aecf0760-bf47-4ae0-b0df-08b435954146-gnosis-mep:service_worker"
+                },
+                "data": [
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-data",
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                        "http://gnosis-mep.org/service_worker"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-data",
+                        "http://gnosis-mep.org/service_worker#queue_limit",
+                        "100"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-data",
+                        "http://gnosis-mep.org/service_worker#queue_space_percent",
+                        "1.0"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-data",
+                        "http://gnosis-mep.org/service_worker#queue_space",
+                        "100"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-data",
+                        "http://gnosis-mep.org/service_worker#stream_key",
+                        "object-detection-ssd-data"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-data",
+                        "http://gnosis-mep.org/service_worker#service_type",
+                        "ObjectDetection"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/color-detection-data",
+                        "http://gnosis-mep.org/service_worker#stream_key",
+                        "color-detection-data"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/color-detection-data",
+                        "http://gnosis-mep.org/service_worker#service_type",
+                        "ColorDetection"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/color-detection-data",
+                        "http://gnosis-mep.org/service_worker#queue_space",
+                        "100"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/color-detection-data",
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                        "http://gnosis-mep.org/service_worker"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/color-detection-data",
+                        "http://gnosis-mep.org/service_worker#queue_limit",
+                        "100"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/color-detection-data",
+                        "http://gnosis-mep.org/service_worker#queue_space_percent",
+                        "1.0"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
+                        "http://gnosis-mep.org/service_worker#queue_limit",
+                        "100"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
+                        "http://gnosis-mep.org/service_worker#service_type",
+                        "ObjectDetection"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                        "http://gnosis-mep.org/service_worker"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
+                        "http://gnosis-mep.org/service_worker#stream_key",
+                        "object-detection-ssd-gpu-data"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
+                        "http://gnosis-mep.org/service_worker#queue_space",
+                        "90"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
+                        "http://gnosis-mep.org/service_worker#queue_space_percent",
+                        "0.9"
+                    ]
+                ]
+            }
+
+        }
+        self.service.scheduler_planner.prepare_local_services_with_workers(ongoing_knowledge_queries)
+        expected_all_services_dict = {
+            "ObjectDetection": {
+                "object-detection-ssd-data": {
+                    "monitoring": {
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "queue_limit": 100,
+                        "queue_space_percent": 1.0,
+                        "queue_space": 100,
+                        "stream_key": "object-detection-ssd-data",
+                        "service_type": "ObjectDetection"
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 100
+                        },
+                        "usage": {
+                            "energy_consumption": 10,
+                            "time": 1
+                        }
+                    }
+                },
+                "object-detection-ssd-gpu-data": {
+                    "monitoring": {
+                        "queue_limit": 100,
+                        "service_type": "ObjectDetection",
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "stream_key": "object-detection-ssd-gpu-data",
+                        "queue_space": 90,
+                        "queue_space_percent": 0.9
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 90
+                        },
+                        "usage": {
+                            "energy_consumption": 6,
+                            "time": 1
+                        }
+                    }
+                }
+            },
+            "ColorDetection": {
+                "color-detection-data": {
+                    "monitoring": {
+                        "stream_key": "color-detection-data",
+                        "service_type": "ColorDetection",
+                        "queue_space": 100,
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "queue_limit": 100,
+                        "queue_space_percent": 1.0
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 100
+                        }
+                    }
+                }
+            }
+        }
+        self.assertDictEqual(expected_all_services_dict, self.service.scheduler_planner.all_services_worker_pool)
+
+    def test_create_buffer_stream_plan_should_return_best_available_with_min_energy(self):
+        self.service.scheduler_planner.all_buffer_streams = {
+            'some-buffer-stream-key': {
+                'query_ids': ['query_id1'],
+                'queries': {
+                    'query_id1': {
+                        'query_text': 'etc ... object_detection etc..'
+                    }
+                }
+            }
+        }
+        self.service.scheduler_planner.all_services_worker_pool = {
+            "ObjectDetection": {
+                "object-detection-ssd-data": {
+                    "monitoring": {
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "queue_limit": 100,
+                        "queue_space_percent": 1.0,
+                        "queue_space": 100,
+                        "stream_key": "object-detection-ssd-data",
+                        "service_type": "ObjectDetection"
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 100
+                        },
+                        "usage": {
+                            "energy_consumption": 10,
+                            "time": 1
+                        }
+                    }
+                },
+                "object-detection-ssd-gpu-data": {
+                    "monitoring": {
+                        "queue_limit": 100,
+                        "service_type": "ObjectDetection",
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "stream_key": "object-detection-ssd-gpu-data",
+                        "queue_space": 90,
+                        "queue_space_percent": 0.9
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 90
+                        },
+                        "usage": {
+                            "energy_consumption": 6,
+                            "time": 1
+                        }
+                    }
+                }
+            }
+        }
+
+        ret_plan = self.service.scheduler_planner.create_buffer_stream_plan(
+            self.service.scheduler_planner.all_buffer_streams['some-buffer-stream-key']
+        )
+        expected_plan = [['object-detection-ssd-gpu-data'], ['wm-data']]
+        self.assertListEqual(expected_plan, ret_plan)
+
+        obj_detections = self.service.scheduler_planner.all_services_worker_pool['ObjectDetection']
+        ssd_gpu = obj_detections['object-detection-ssd-gpu-data']
+        ssd_gpu_planned_res = ssd_gpu['resources']['planned']
+        self.assertEqual(ssd_gpu_planned_res['queue_space'], 60)
+
+    def test_create_buffer_stream_plan_should_return_best_available_with_min_energy2(self):
+        self.service.scheduler_planner.all_buffer_streams = {
+            'some-buffer-stream-key': {
+                'query_ids': ['query_id1'],
+                'queries': {
+                    'query_id1': {
+                        'query_text': 'etc ... object_detection etc..'
+                    }
+                }
+            }
+        }
+        self.service.scheduler_planner.all_services_worker_pool = {
+            "ObjectDetection": {
+                "object-detection-ssd-data": {
+                    "monitoring": {
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "queue_limit": 100,
+                        "queue_space_percent": 1.0,
+                        "queue_space": 100,
+                        "stream_key": "object-detection-ssd-data",
+                        "service_type": "ObjectDetection"
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 100
+                        },
+                        "usage": {
+                            "energy_consumption": 5,
+                            "time": 1
+                        }
+                    }
+                },
+                "object-detection-ssd-gpu-data": {
+                    "monitoring": {
+                        "queue_limit": 100,
+                        "service_type": "ObjectDetection",
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "stream_key": "object-detection-ssd-gpu-data",
+                        "queue_space": 90,
+                        "queue_space_percent": 0.9
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 90
+                        },
+                        "usage": {
+                            "energy_consumption": 6,
+                            "time": 1
+                        }
+                    }
+                }
+            }
+        }
+
+        ret_plan = self.service.scheduler_planner.create_buffer_stream_plan(
+            self.service.scheduler_planner.all_buffer_streams['some-buffer-stream-key']
+        )
+        expected_plan = [['object-detection-ssd-data'], ['wm-data']]
+        self.assertListEqual(expected_plan, ret_plan)
+
+        obj_detections = self.service.scheduler_planner.all_services_worker_pool['ObjectDetection']
+        ssd_gpu = obj_detections['object-detection-ssd-data']
+        ssd_gpu_planned_res = ssd_gpu['resources']['planned']
+        self.assertEqual(ssd_gpu_planned_res['queue_space'], 70)
