@@ -307,8 +307,7 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                             "queue_space": 100
                         },
                         "usage": {
-                            "energy_consumption": 10,
-                            "time": 1
+                            "energy_consumption": 188.0,
                         }
                     }
                 },
@@ -326,8 +325,7 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                             "queue_space": 90
                         },
                         "usage": {
-                            "energy_consumption": 6,
-                            "time": 1
+                            "energy_consumption": 163.8,
                         }
                     }
                 }

@@ -1,5 +1,7 @@
 import random
 
+from adaptation_planner.conf import MOCKED_WORKERS_ENERGY_USAGE_DICT
+
 
 class SchedulerPlanner(object):
     def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key, mocked_od_stream_key):
@@ -137,33 +139,11 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
 
         return required_services
 
-    def mocked_buffer_streams(self):
-        self.all_buffer_streams = {
-            'f32c1d9e6352644a5894305ecb478b0d': {
-                'query_ids': ['f860ba666ed657944d19ca051e58cd2c'],
-                'queries': {
-                    'f860ba666ed657944d19ca051e58cd2c': {
-                        'query_text': 'select object_detection from publisher1 where (object1.label = car) within TUMBLING_COUNT_WINDOW(4) withconfidence >50'
-                    }
-                }
-            }
-        }
-        self.all_queries = {
-            'f860ba666ed657944d19ca051e58cd2c': {
-                'query_text': 'select object_detection from publisher1 where (object1.label = car) within TUMBLING_COUNT_WINDOW(4) withconfidence >50'
-            }
-        }
-
     def mocked_services_resources_usage(self):
-
-        self.all_services_worker_pool['ObjectDetection']['object-detection-ssd-gpu-data']['resources']['usage'] = {
-            'energy_consumption': 6,
-            'time': 1,
-        }
-        self.all_services_worker_pool['ObjectDetection']['object-detection-ssd-data']['resources']['usage'] = {
-            'energy_consumption': 10,
-            'time': 1,
-        }
+        for worker_key, energy_consumption in MOCKED_WORKERS_ENERGY_USAGE_DICT.items():
+            self.all_services_worker_pool['ObjectDetection'][worker_key]['resources']['usage'] = {
+                'energy_consumption': energy_consumption,
+            }
 
     def ask_knowledge_for_all_entities_of_namespace(self, namespace):
         k_query_text = """
