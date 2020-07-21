@@ -77,7 +77,7 @@ class AdaptationPlanner(BaseTracerService):
             self.scheduler_planner.plan(change_request, plan=plan)
             changed = True
 
-        if change_request['type'] == 'serviceWorkerOverloaded':
+        if change_request['type'] in ['serviceWorkerOverloaded', 'serviceWorkerBestIdle']:
             self.scheduler_planner.plan(change_request, plan=plan)
             changed = True
 
