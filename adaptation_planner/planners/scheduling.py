@@ -222,13 +222,18 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         return buffer_stream_plan
 
     def create_scheduling_plan(self):
-        scheduling_dataflow_plan = {}
+        strategy_name = 'single_best'
+        scheduling_dataflows = {}
         for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
             buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
-            scheduling_dataflow_plan[buffer_stream_key] = buffer_stream_plan
+            plan_cum_weight = None
+            scheduling_dataflows[buffer_stream_key] = [(plan_cum_weight, buffer_stream_plan)]
 
         return {
-            'dataflow': scheduling_dataflow_plan
+            'strategy': {
+                'name': strategy_name,
+                'dataflows': scheduling_dataflows
+            }
         }
 
     def plan_stage_preparation_start(self, cause, plan):

@@ -6,7 +6,7 @@ from event_service_utils.tracing.jaeger import init_tracer
 
 from adaptation_planner.planners.scheduling import SchedulerPlanner, MaxEnergyForQueueLimitSchedulerPlanner
 
-from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
+# from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
 
 
 class AdaptationPlanner(BaseTracerService):
