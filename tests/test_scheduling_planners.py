@@ -872,14 +872,54 @@ class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStre
         self.assertDictEqual(second_call[0][0], color_worker)
         self.assertAlmostEqual(second_call[0][1], 0.01)
 
-    # def update_workers_planned_resources(self, dataflow_choice, dataflow_weight, total_cum_weight, min_queue_space_percent):
-    #     # Change of getting this dataflow
-    #     resource_usage_rating = (dataflow_weight / total_cum_weight)
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.update_workers_planned_resources'
+    )
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.create_dataflow_choices_with_cum_weights_and_best_dataflow'
+    )
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.get_per_service_nonfloaded_workers'
+    )
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.get_buffer_stream_required_services'
+    )
+    def test_create_buffer_stream_choices_plan_calls_necessary_functions(self, required_services_mocked, non_floaded_mocked, create_choices_mocked, update_mocked):
+        buffer_stream_entity = {}
+        best_weight_and_index = [3, 0]
+        best_dataflow = ['fake_dataflow']
+        create_choices_mocked.return_value = [best_dataflow, best_weight_and_index]
+        self.service.scheduler_planner.create_buffer_stream_choices_plan(buffer_stream_entity)
+        required_services_mocked.assert_called_once()
+        non_floaded_mocked.assert_called_once()
+        create_choices_mocked.assert_called_once()
+        update_mocked.assert_called_once()
 
-    #     # change of getting best dataflow times the expected usage before a new plan would be required
-    #     resource_usage = resource_usage_rating * min_queue_space_percent
-    #     for worker in dataflow_choice:
-    #         worker_key = worker['buffer_stream_key']
-    #         service_type = worker['service_type']
-    #         actual_worker_reference = self.all_services_worker_pool[service_type][worker_key]
-    #         self.update_worker_planned_resource(actual_worker_reference, resource_usage)
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.create_buffer_stream_choices_plan'
+    )
+    def test_create_scheduling_plan(self, create_choices_plan_mocked):
+        self.service.scheduler_planner.all_buffer_streams = {
+            'bf-1': {},
+            'bf-2': {},
+            'bf-3': {},
+        }
+        dataflows = {
+            'bf-1': 'w-choices1',
+            'bf-2': 'w-choices2',
+            'bf-3': 'w-choices3',
+        }
+        create_choices_plan_mocked.side_effect = ['w-choices1', 'w-choices2', 'w-choices3']
+        expected_scheduling_strategy_plan = {
+            'strategy': {
+                'name': 'weigted_random',
+                'dataflows': dataflows
+            }
+        }
+        sc_plan = self.service.scheduler_planner.create_scheduling_plan()
+        self.assertDictEqual(sc_plan, expected_scheduling_strategy_plan)

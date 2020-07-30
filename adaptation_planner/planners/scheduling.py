@@ -566,38 +566,12 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
             self.update_worker_planned_resource(actual_worker_reference, resource_usage)
 
     def create_buffer_stream_choices_plan(self, buffer_stream_entity):
-        required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
         min_queue_space_percent = 0.3
+        required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
 
         per_service_nonfloaded_workers = self.get_per_service_nonfloaded_workers(
             required_services, min_queue_space_percent)
 
-        # cartesian_product_dataflows_choices = itertools.product(per_service_nonfloaded_workers.values())
-
-        # dataflow_choices_with_cum_weights = []
-        # best_weight_and_index = None
-        # prev_cum_weight = 0
-        # for i, dataflow_choice in enumerate(cartesian_product_dataflows_choices):
-        #     # dataflow weight is the min weight of the whole dataflow workers
-        #     # (if one step is bad it will tend to reduce the whole dataflow to that level)
-        #     if len(dataflow_choice == 1):
-        #         dataflow_weight = dataflow_choice[0][-1]
-        #     else:
-        #         dataflow_weight = functools.reduce(
-        #             lambda w_a, w_b:
-        #                 min(self.get_worker_choice_weight(w_a), self.get_worker_choice_weight(w_b)),
-        #             dataflow_choice
-        #         )
-
-        #     dataflow_cum_weight = prev_cum_weight + dataflow_weight
-        #     if best_weight_and_index is None:
-        #         best_weight_and_index = (dataflow_weight, i)
-        #     else:
-        #         if dataflow_weight >= best_weight_and_index[0]:
-        #             best_weight_and_index = (dataflow_weight, i)
-        #     prev_cum_weight = dataflow_cum_weight
-
-        #     dataflow_choices_with_cum_weights.append([dataflow_cum_weight, dataflow_choice])
         dataflow_choices_with_cum_weights, best_weight_and_index = self.create_dataflow_choices_with_cum_weights_and_best_dataflow(
             per_service_nonfloaded_workers
         )
@@ -605,24 +579,14 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
         # since this will be the dataflow that most-likely will be used chosen in the scheduler
         best_dataflow = dataflow_choices_with_cum_weights[best_weight_and_index[1]]
         total_cum_weight = dataflow_choices_with_cum_weights[-1][0]
+        best_dataflow_weight = best_weight_and_index[0]
         self.update_workers_planned_resources(
-            best_dataflow, best_weight_and_index[0], total_cum_weight, min_queue_space_percent)
-
-        # # Change of getting this best dataflow
-        # resource_usage_rating = (best_weight_and_index[0] / total_cum_weight)
-
-        # # change of getting best dataflow times the expected usage before a new plan would be required
-        # resource_usage = resource_usage_rating * min_queue_space_percent
-        # for worker in best_dataflow:
-        #     worker_key = worker['buffer_stream_key']
-        #     service_type = worker['service_type']
-        #     actual_worker_reference = self.all_services_worker_pool[service_type][worker_key]
-        #     self.update_worker_planned_resource(actual_worker_reference, resource_usage)
+            best_dataflow, best_dataflow_weight, total_cum_weight, min_queue_space_percent)
 
         return dataflow_choices_with_cum_weights
 
     def create_scheduling_plan(self):
-        strategy_name = 'single_best'
+        strategy_name = 'weigted_random'
         scheduling_dataflows = {}
         for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
             buffer_stream_plan = self.create_buffer_stream_choices_plan(buffer_stream_entity)
