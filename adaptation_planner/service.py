@@ -4,7 +4,11 @@ from event_service_utils.logging.decorators import timer_logger
 from event_service_utils.services.tracer import BaseTracerService
 from event_service_utils.tracing.jaeger import init_tracer
 
-from adaptation_planner.planners.scheduling import SchedulerPlanner, MaxEnergyForQueueLimitSchedulerPlanner
+from adaptation_planner.planners.scheduling import (
+    SchedulerPlanner,
+    MaxEnergyForQueueLimitSchedulerPlanner,
+    WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner
+)
 
 # from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
 
@@ -40,7 +44,7 @@ class AdaptationPlanner(BaseTracerService):
 
         self.scheduler_cmd_stream_key = 'sc-cmd'
         self.ce_endpoint_stream_key = 'wm-data'
-        self.scheduler_planner = MaxEnergyForQueueLimitSchedulerPlanner(
+        self.scheduler_planner = WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(
             self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
             # mocked_od_stream_key=MOCKED_OD_STREAM_KEY
         )

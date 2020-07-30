@@ -5,7 +5,10 @@ from event_service_utils.tests.json_msg_helper import prepare_event_msg_tuple
 
 from adaptation_planner.service import AdaptationPlanner
 
-from adaptation_planner.planners.scheduling import MaxEnergyForQueueLimitSchedulerPlanner
+from adaptation_planner.planners.scheduling import (
+    MaxEnergyForQueueLimitSchedulerPlanner,
+    WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner
+)
 
 from adaptation_planner.conf import (
     SERVICE_STREAM_KEY,
@@ -145,7 +148,6 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
         prepare_struct.assert_not_called()
         create_sc_plan.assert_not_called()
         send_plan.assert_not_called()
-
 
     @patch(
         'adaptation_planner.planners.scheduling.MaxEnergyForQueueLimitSchedulerPlanner'
@@ -479,3 +481,405 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
         ssd_gpu = obj_detections['object-detection-ssd-data']
         ssd_gpu_planned_res = ssd_gpu['resources']['planned']
         self.assertEqual(ssd_gpu_planned_res['queue_space'], 70)
+
+
+class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
+    GLOBAL_SERVICE_CONFIG = {
+        'service_stream_key': SERVICE_STREAM_KEY,
+        'service_cmd_key': SERVICE_CMD_KEY,
+        'logging_level': 'ERROR',
+        'tracer_configs': {'reporting_host': None, 'reporting_port': None},
+    }
+    SERVICE_CLS = AdaptationPlanner
+    MOCKED_STREAMS_DICT = {
+        SERVICE_STREAM_KEY: [],
+        SERVICE_CMD_KEY: [],
+    }
+
+    def instantiate_service(self):
+        super(TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner, self).instantiate_service()
+        self.service.scheduler_planner = WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(
+            self.service, self.service.scheduler_cmd_stream_key, self.service.ce_endpoint_stream_key,
+        )
+        return self.service
+
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.get_worker_choice_weight'
+    )
+    def test_get_service_nonfloaded_workers(self, worker_weight_mock):
+        service = 'ObjectDetection'
+        self.service.scheduler_planner.all_services_worker_pool = {
+            "ObjectDetection": {
+                "object-detection-ssd-data": {
+                    "monitoring": {
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "queue_limit": 100,
+                        "queue_space_percent": 1.0,
+                        "queue_space": 100,
+                        "stream_key": "object-detection-ssd-data",
+                        "service_type": "ObjectDetection"
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 100
+                        },
+                        "usage": {
+                            "energy_consumption": 10,
+                            "time": 1
+                        }
+                    }
+                },
+                "object-detection-ssd-gpu-data": {
+                    "monitoring": {
+                        "queue_limit": 100,
+                        "service_type": "ObjectDetection",
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "stream_key": "object-detection-ssd-gpu-data",
+                        "queue_space": 10,
+                        "queue_space_percent": 0.1
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 10
+                        },
+                        "usage": {
+                            "energy_consumption": 6,
+                            "time": 1
+                        }
+                    }
+                },
+                "object-detection-ssd-gpu2-data": {
+                    "monitoring": {
+                        "queue_limit": 100,
+                        "service_type": "ObjectDetection",
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "stream_key": "object-detection-ssd-gpu2-data",
+                        "queue_space": 30,
+                        "queue_space_percent": 0.3
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 30
+                        },
+                        "usage": {
+                            "energy_consumption": 6,
+                            "time": 1
+                        }
+                    }
+                }
+            }
+        }
+        worker_weight_mock.side_effect = [1, 3]
+        min_queue_space_percent = 0.3
+        non_floaded_worker = list(self.service.scheduler_planner.get_service_nonfloaded_workers(service, min_queue_space_percent))
+        expected_res = [
+            ('ObjectDetection', 'object-detection-ssd-data', 1),
+            ('ObjectDetection', 'object-detection-ssd-gpu2-data', 3)
+        ]
+        self.assertListEqual(non_floaded_worker, expected_res)
+
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.get_worker_choice_weight'
+    )
+    def test_get_per_service_nonfloaded_workers(self, worker_weight_mock):
+        service = 'ObjectDetection'
+        self.service.scheduler_planner.all_services_worker_pool = {
+            "ObjectDetection": {
+                "object-detection-ssd-data": {
+                    "monitoring": {
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "queue_limit": 100,
+                        "queue_space_percent": 1.0,
+                        "queue_space": 100,
+                        "stream_key": "object-detection-ssd-data",
+                        "service_type": "ObjectDetection"
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 100
+                        },
+                        "usage": {
+                            "energy_consumption": 10,
+                            "time": 1
+                        }
+                    }
+                },
+                "object-detection-ssd-gpu-data": {
+                    "monitoring": {
+                        "queue_limit": 100,
+                        "service_type": "ObjectDetection",
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "stream_key": "object-detection-ssd-gpu-data",
+                        "queue_space": 10,
+                        "queue_space_percent": 0.1
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 10
+                        },
+                        "usage": {
+                            "energy_consumption": 6,
+                            "time": 1
+                        }
+                    }
+                },
+                "object-detection-ssd-gpu2-data": {
+                    "monitoring": {
+                        "queue_limit": 100,
+                        "service_type": "ObjectDetection",
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "stream_key": "object-detection-ssd-gpu2-data",
+                        "queue_space": 30,
+                        "queue_space_percent": 0.3
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 30
+                        },
+                        "usage": {
+                            "energy_consumption": 6,
+                            "time": 1
+                        }
+                    }
+                }
+            },
+            "ColorDetection": {
+                "color-detection-data": {
+                    "monitoring": {
+                        "type": "http://gnosis-mep.org/service_worker",
+                        "queue_limit": 100,
+                        "queue_space_percent": 1.0,
+                        "queue_space": 100,
+                        "stream_key": "color-detection-data",
+                        "service_type": "ColorDetection"
+                    },
+                    "resources": {
+                        "planned": {
+                            "queue_space": 100
+                        },
+                        "usage": {
+                            "energy_consumption": 10,
+                            "time": 1
+                        }
+                    }
+                },
+            }
+        }
+        worker_weight_mock.side_effect = [1, 3, 4]
+        min_queue_space_percent = 0.3
+        required_services = ['ObjectDetection', 'ColorDetection']
+        per_service_non_floaded_workers = self.service.scheduler_planner.get_per_service_nonfloaded_workers(required_services, min_queue_space_percent)
+        expected_res = {
+            'ObjectDetection': [
+                ('ObjectDetection', 'object-detection-ssd-data', 1),
+                ('ObjectDetection', 'object-detection-ssd-gpu2-data', 3)
+            ],
+
+            'ColorDetection': [
+                ('ColorDetection', 'color-detection-data', 4)
+            ],
+        }
+        self.assertDictEqual(per_service_non_floaded_workers, expected_res)
+
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.calculate_worker_queue_space_percentage'
+    )
+    def test_get_worker_choice_weight(self, perc_mock):
+        perc_mock.return_value = 0.5
+        worker = {
+            'resources': {
+                'usage': {
+                    'energy_consumption': 10
+                }
+            }
+        }
+        weight = self.service.scheduler_planner.get_worker_choice_weight(worker)
+        expected = 0.05
+        self.assertEqual(expected, weight)
+
+    def test_get_dataflow_choice_weight(self):
+        dataflow_choice = (
+            ('ObjectDetection', 'object-detection-ssd-data', 3),
+            ('ColorDetection', 'color-detection-data', 2)
+        )
+        weight = self.service.scheduler_planner.get_dataflow_choice_weight(dataflow_choice)
+        expected = 2
+        self.assertEqual(expected, weight)
+
+    def test_get_dataflow_choice_weight_with_length_one(self):
+        dataflow_choice = (
+            ('ObjectDetection', 'object-detection-ssd-data', 3),
+        )
+        weight = self.service.scheduler_planner.get_dataflow_choice_weight(dataflow_choice)
+        expected = 3
+        self.assertEqual(expected, weight)
+
+    def test_calculate_cumsum_for_dataflow_choice_initial_value(self):
+        dataflow_choice = [
+            [
+                "ObjectDetection",
+                "object-detection-ssd-gpu2-data",
+                3
+            ],
+            [
+                "ColorDetection",
+                "color-detection-data",
+                4
+            ]
+        ]
+        dataflow_index = 0
+        prev_cum_weight = 0
+        best_weight_and_index = None
+        dataflow_weighted_choice, prev_cum_weight, best_weight_and_index = self.service.scheduler_planner.calculate_cumsum_for_dataflow_choice(
+            dataflow_index, dataflow_choice, prev_cum_weight, best_weight_and_index)
+
+        expected_dataflow_choice = [
+            3,
+            [['ObjectDetection', 'object-detection-ssd-gpu2-data', 3], ['ColorDetection', 'color-detection-data', 4]]
+        ]
+        self.assertEqual(prev_cum_weight, 3)
+        self.assertListEqual(list(best_weight_and_index), [3, 0])
+        self.assertListEqual(dataflow_weighted_choice, expected_dataflow_choice)
+
+    def test_calculate_cumsum_for_dataflow_choice_second_value(self):
+        dataflow_choice = [
+            [
+                "ObjectDetection",
+                "object-detection-ssd-gpu2-data",
+                3
+            ],
+            [
+                "ColorDetection",
+                "color-detection-data",
+                4
+            ]
+        ]
+        dataflow_index = 1
+        prev_cum_weight = 1
+        best_weight_and_index = (1, 0)
+        dataflow_weighted_choice, prev_cum_weight, best_weight_and_index = self.service.scheduler_planner.calculate_cumsum_for_dataflow_choice(
+            dataflow_index, dataflow_choice, prev_cum_weight, best_weight_and_index)
+
+        expected_dataflow_choice = [
+            4,
+            [['ObjectDetection', 'object-detection-ssd-gpu2-data', 3], ['ColorDetection', 'color-detection-data', 4]]
+        ]
+        self.assertEqual(prev_cum_weight, 4)
+        self.assertListEqual(list(best_weight_and_index), [3, 1])
+        self.assertListEqual(dataflow_weighted_choice, expected_dataflow_choice)
+
+    def test_create_dataflow_choices_with_cum_weights_and_best_dataflow(self):
+        per_service_nonfloaded_workers = {
+            'ObjectDetection': [
+                ('ObjectDetection', 'object-detection-ssd-data', 1),
+                ('ObjectDetection', 'object-detection-ssd-gpu2-data', 3)
+            ],
+
+            'ColorDetection': [
+                ('ColorDetection', 'color-detection-data', 5)
+            ],
+        }
+        dataflow_choices, best_weight_and_index = self.service.scheduler_planner.create_dataflow_choices_with_cum_weights_and_best_dataflow(
+            per_service_nonfloaded_workers)
+
+        expected_dataflow_choices = [
+            [
+                1,
+                (('ObjectDetection', 'object-detection-ssd-data', 1), ('ColorDetection', 'color-detection-data', 5))
+            ],
+            [
+                4,
+                (('ObjectDetection', 'object-detection-ssd-gpu2-data', 3), ('ColorDetection', 'color-detection-data', 5))
+            ]
+        ]
+        self.assertListEqual(dataflow_choices, expected_dataflow_choices)
+        self.assertListEqual(list(best_weight_and_index), [3, 1])
+
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.update_worker_planned_resource'
+    )
+    def test_update_workers_planned_resources(self, mocked_update_worker):
+        obj_worker = {
+            "monitoring": {
+                "type": "http://gnosis-mep.org/service_worker",
+                "queue_limit": 100,
+                "queue_space_percent": 1.0,
+                "queue_space": 100,
+                "stream_key": "object-detection-ssd-data",
+                "service_type": "ObjectDetection"
+            },
+            "resources": {
+                "planned": {
+                    "queue_space": 100
+                },
+                "usage": {
+                    "energy_consumption": 10,
+                    "time": 1
+                }
+            }
+        }
+
+        color_worker = {
+            "monitoring": {
+                "type": "http://gnosis-mep.org/service_worker",
+                "queue_limit": 100,
+                "queue_space_percent": 1.0,
+                "queue_space": 100,
+                "stream_key": "color-detection-data",
+                "service_type": "ColorDetection"
+            },
+            "resources": {
+                "planned": {
+                    "queue_space": 100
+                },
+                "usage": {
+                    "energy_consumption": 10,
+                    "time": 1
+                }
+            }
+        }
+        self.service.scheduler_planner.all_services_worker_pool = {
+            "ObjectDetection": {
+                "object-detection-ssd-data": obj_worker
+            },
+            "ColorDetection": {
+                "color-detection-data": color_worker
+            }
+        }
+        dataflow_choice = [
+            5,
+            (('ObjectDetection', 'object-detection-ssd-data', 1), ('ColorDetection', 'color-detection-data', 5))
+        ]
+
+        dataflow_weight = 1
+        total_cum_weight = 10
+        min_queue_space_percent = 0.1
+        self.service.scheduler_planner.update_workers_planned_resources(
+            dataflow_choice,
+            dataflow_weight,
+            total_cum_weight,
+            min_queue_space_percent
+        )
+        self.assertEqual(mocked_update_worker.call_count, 2)
+        first_call = mocked_update_worker.call_args_list[0]
+        self.assertDictEqual(first_call[0][0], obj_worker)
+        self.assertAlmostEqual(first_call[0][1], 0.01)
+        second_call = mocked_update_worker.call_args_list[1]
+        self.assertDictEqual(second_call[0][0], color_worker)
+        self.assertAlmostEqual(second_call[0][1], 0.01)
+
+    # def update_workers_planned_resources(self, dataflow_choice, dataflow_weight, total_cum_weight, min_queue_space_percent):
+    #     # Change of getting this dataflow
+    #     resource_usage_rating = (dataflow_weight / total_cum_weight)
+
+    #     # change of getting best dataflow times the expected usage before a new plan would be required
+    #     resource_usage = resource_usage_rating * min_queue_space_percent
+    #     for worker in dataflow_choice:
+    #         worker_key = worker['buffer_stream_key']
+    #         service_type = worker['service_type']
+    #         actual_worker_reference = self.all_services_worker_pool[service_type][worker_key]
+    #         self.update_worker_planned_resource(actual_worker_reference, resource_usage)
