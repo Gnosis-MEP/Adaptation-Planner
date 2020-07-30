@@ -565,6 +565,15 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
             actual_worker_reference = self.all_services_worker_pool[service_type][worker_key]
             self.update_worker_planned_resource(actual_worker_reference, resource_usage)
 
+    def clean_up_dataflow_choices_for_correct_format(self, dataflow_choices_with_cum_weights):
+        correct_format = []
+        for cum_weight, dataflow_choice in dataflow_choices_with_cum_weights:
+            correct_dataflow_choice = tuple([df[1]] for df in dataflow_choice)
+            correct_dataflow_choice += ([self.ce_endpoint_stream_key],)
+            correct_weighted_format = [cum_weight, correct_dataflow_choice]
+            correct_format.append(correct_weighted_format)
+        return correct_format
+
     def create_buffer_stream_choices_plan(self, buffer_stream_entity):
         min_queue_space_percent = 0.3
         required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
@@ -583,7 +592,10 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
         self.update_workers_planned_resources(
             best_dataflow, best_dataflow_weight, total_cum_weight, min_queue_space_percent)
 
-        return dataflow_choices_with_cum_weights
+        cleaned_dataflow_choices_with_cum_weights = self.clean_up_dataflow_choices_for_correct_format(
+            dataflow_choices_with_cum_weights)
+
+        return cleaned_dataflow_choices_with_cum_weights
 
     def create_scheduling_plan(self):
         strategy_name = 'weigted_random'
@@ -591,7 +603,6 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
         for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
             buffer_stream_plan = self.create_buffer_stream_choices_plan(buffer_stream_entity)
             scheduling_dataflows[buffer_stream_key] = buffer_stream_plan
-
         return {
             'strategy': {
                 'name': strategy_name,

@@ -872,6 +872,31 @@ class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStre
         self.assertDictEqual(second_call[0][0], color_worker)
         self.assertAlmostEqual(second_call[0][1], 0.01)
 
+    def test_clean_up_dataflow_choices_for_correct_format(self):
+        ce_endpoint_stream_key = 'endpoint-stream-key'
+        self.service.scheduler_planner.ce_endpoint_stream_key = ce_endpoint_stream_key
+        dataflow_choices_with_cum_weights = [
+            [
+                1,
+                (('ObjectDetection', 'object-detection-ssd-data', 1), ('ColorDetection', 'color-detection-data', 5))
+            ],
+            [
+                4,
+                (('ObjectDetection', 'object-detection-ssd-gpu2-data', 3), ('ColorDetection', 'color-detection-data', 5))
+            ]
+        ]
+        ret = self.service.scheduler_planner.clean_up_dataflow_choices_for_correct_format(
+            dataflow_choices_with_cum_weights)
+        expected_ret = [
+            [1, (['object-detection-ssd-data'], ['color-detection-data'], [ce_endpoint_stream_key])],
+            [4, (['object-detection-ssd-gpu2-data'], ['color-detection-data'], [ce_endpoint_stream_key])]
+        ]
+        self.assertListEqual(ret, expected_ret)
+
+    @patch(
+        'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
+        '.clean_up_dataflow_choices_for_correct_format'
+    )
     @patch(
         'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
         '.update_workers_planned_resources'
@@ -888,7 +913,7 @@ class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStre
         'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
         '.get_buffer_stream_required_services'
     )
-    def test_create_buffer_stream_choices_plan_calls_necessary_functions(self, required_services_mocked, non_floaded_mocked, create_choices_mocked, update_mocked):
+    def test_create_buffer_stream_choices_plan_calls_necessary_functions(self, required_services_mocked, non_floaded_mocked, create_choices_mocked, update_mocked, clean_mocked):
         buffer_stream_entity = {}
         best_weight_and_index = [3, 0]
         best_dataflow = ['fake_dataflow']
@@ -898,6 +923,7 @@ class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStre
         non_floaded_mocked.assert_called_once()
         create_choices_mocked.assert_called_once()
         update_mocked.assert_called_once()
+        clean_mocked.assert_called_once()
 
     @patch(
         'adaptation_planner.planners.scheduling.WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner'
@@ -923,3 +949,4 @@ class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStre
         }
         sc_plan = self.service.scheduler_planner.create_scheduling_plan()
         self.assertDictEqual(sc_plan, expected_scheduling_strategy_plan)
+
