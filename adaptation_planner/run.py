@@ -8,6 +8,7 @@ from adaptation_planner.conf import (
     REDIS_PORT,
     SERVICE_STREAM_KEY,
     SERVICE_CMD_KEY,
+    SCHEDULER_PLANNER_TYPE,
     LOGGING_LEVEL,
     TRACER_REPORTING_HOST,
     TRACER_REPORTING_PORT,
@@ -23,6 +24,7 @@ def run_service():
     service = AdaptationPlanner(
         service_stream_key=SERVICE_STREAM_KEY,
         service_cmd_key=SERVICE_CMD_KEY,
+        scheduler_planner_type=SCHEDULER_PLANNER_TYPE,
         stream_factory=stream_factory,
         logging_level=LOGGING_LEVEL,
         tracer_configs=tracer_configs

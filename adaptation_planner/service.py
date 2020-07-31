@@ -5,12 +5,12 @@ from event_service_utils.services.tracer import BaseTracerService
 from event_service_utils.tracing.jaeger import init_tracer
 
 from adaptation_planner.planners.scheduling import (
-    SchedulerPlanner,
+    SimpleFixedSchedulerPlanner,
     MaxEnergyForQueueLimitSchedulerPlanner,
     WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner
 )
 
-from adaptation_planner.conf import MOCKED_OD_STREAM_KEY, SCHEDULER_PLANNER_TYPE
+from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
 
 
 class AdaptationPlanner(BaseTracerService):
@@ -21,6 +21,7 @@ class AdaptationPlanner(BaseTracerService):
 
     def __init__(self,
                  service_stream_key, service_cmd_key,
+                 scheduler_planner_type,
                  stream_factory,
                  logging_level,
                  tracer_configs):
@@ -44,11 +45,12 @@ class AdaptationPlanner(BaseTracerService):
 
         self.scheduler_cmd_stream_key = 'sc-cmd'
         self.ce_endpoint_stream_key = 'wm-data'
+        self.scheduler_planner_type = scheduler_planner_type
         self.setup_scheduler_planner()
 
     def setup_scheduler_planner(self):
         self.available_scheduler_planners = {
-            'old': SchedulerPlanner(
+            'simple_fixed': SimpleFixedSchedulerPlanner(
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
                 mocked_od_stream_key=MOCKED_OD_STREAM_KEY
             ),
@@ -60,7 +62,7 @@ class AdaptationPlanner(BaseTracerService):
             )
         }
 
-        self.scheduler_planner = self.available_scheduler_planners[SCHEDULER_PLANNER_TYPE]
+        self.scheduler_planner = self.available_scheduler_planners[self.scheduler_planner_type]
 
     @timer_logger
     def process_data_event(self, event_data, json_msg):

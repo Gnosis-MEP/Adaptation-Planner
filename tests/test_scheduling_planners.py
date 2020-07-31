@@ -13,6 +13,7 @@ from adaptation_planner.planners.scheduling import (
 from adaptation_planner.conf import (
     SERVICE_STREAM_KEY,
     SERVICE_CMD_KEY,
+    SCHEDULER_PLANNER_TYPE,
 )
 
 
@@ -20,6 +21,7 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
     GLOBAL_SERVICE_CONFIG = {
         'service_stream_key': SERVICE_STREAM_KEY,
         'service_cmd_key': SERVICE_CMD_KEY,
+        'scheduler_planner_type': SCHEDULER_PLANNER_TYPE,
         'logging_level': 'ERROR',
         'tracer_configs': {'reporting_host': None, 'reporting_port': None},
     }
@@ -487,6 +489,7 @@ class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStre
     GLOBAL_SERVICE_CONFIG = {
         'service_stream_key': SERVICE_STREAM_KEY,
         'service_cmd_key': SERVICE_CMD_KEY,
+        'scheduler_planner_type': SCHEDULER_PLANNER_TYPE,
         'logging_level': 'ERROR',
         'tracer_configs': {'reporting_host': None, 'reporting_port': None},
     }

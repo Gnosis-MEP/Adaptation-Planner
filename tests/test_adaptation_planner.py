@@ -8,6 +8,7 @@ from adaptation_planner.service import AdaptationPlanner
 from adaptation_planner.conf import (
     SERVICE_STREAM_KEY,
     SERVICE_CMD_KEY,
+    SCHEDULER_PLANNER_TYPE,
 )
 
 
@@ -15,6 +16,7 @@ class TestAdaptationPlanner(MockedServiceStreamTestCase):
     GLOBAL_SERVICE_CONFIG = {
         'service_stream_key': SERVICE_STREAM_KEY,
         'service_cmd_key': SERVICE_CMD_KEY,
+        'scheduler_planner_type': SCHEDULER_PLANNER_TYPE,
         'logging_level': 'ERROR',
         'tracer_configs': {'reporting_host': None, 'reporting_port': None},
     }

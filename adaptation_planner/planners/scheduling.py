@@ -5,9 +5,9 @@ import random
 from adaptation_planner.conf import MOCKED_WORKERS_ENERGY_USAGE_DICT
 
 
-class SchedulerPlanner(object):
+class SimpleFixedSchedulerPlanner(object):
     def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key, mocked_od_stream_key):
-        super(SchedulerPlanner, self).__init__()
+        super(SimpleFixedSchedulerPlanner, self).__init__()
         self.parent_service = parent_service
         self.scheduler_cmd_stream = self.parent_service.get_destination_streams(scheduler_cmd_stream_key)
         self.ce_endpoint_stream_key = ce_endpoint_stream_key
