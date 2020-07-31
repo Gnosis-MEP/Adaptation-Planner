@@ -10,7 +10,7 @@ from adaptation_planner.planners.scheduling import (
     WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner
 )
 
-# from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
+from adaptation_planner.conf import MOCKED_OD_STREAM_KEY, SCHEDULER_PLANNER_TYPE
 
 
 class AdaptationPlanner(BaseTracerService):
@@ -44,10 +44,23 @@ class AdaptationPlanner(BaseTracerService):
 
         self.scheduler_cmd_stream_key = 'sc-cmd'
         self.ce_endpoint_stream_key = 'wm-data'
-        self.scheduler_planner = WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(
-            self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-            # mocked_od_stream_key=MOCKED_OD_STREAM_KEY
-        )
+        self.setup_scheduler_planner()
+
+    def setup_scheduler_planner(self):
+        self.available_scheduler_planners = {
+            'old': SchedulerPlanner(
+                self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
+                mocked_od_stream_key=MOCKED_OD_STREAM_KEY
+            ),
+            'single_best': MaxEnergyForQueueLimitSchedulerPlanner(
+                self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
+            ),
+            'weighted_random': WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(
+                self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
+            )
+        }
+
+        self.scheduler_planner = self.available_scheduler_planners[SCHEDULER_PLANNER_TYPE]
 
     @timer_logger
     def process_data_event(self, event_data, json_msg):

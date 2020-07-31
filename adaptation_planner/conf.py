@@ -16,6 +16,8 @@ MOCKED_WORKERS_ENERGY_USAGE_DICT = config('MOCKED_WORKERS_ENERGY_USAGE_DICT', ca
                                           (m.split('/')[0], float(m.split('/')[1])) for m in v.split(',')]),
                                           default="object-detection-ssd-gpu-data/163.8,object-detection-ssd-data/188.0")
 
+SCHEDULER_PLANNER_TYPE = config('SCHEDULER_PLANNER_TYPE', default='single_best')
+
 SERVICE_STREAM_KEY = config('SERVICE_STREAM_KEY')
 SERVICE_CMD_KEY = config('SERVICE_CMD_KEY')
 

@@ -598,7 +598,7 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
         return cleaned_dataflow_choices_with_cum_weights
 
     def create_scheduling_plan(self):
-        strategy_name = 'weigted_random'
+        strategy_name = 'weighted_random'
         scheduling_dataflows = {}
         for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
             buffer_stream_plan = self.create_buffer_stream_choices_plan(buffer_stream_entity)
