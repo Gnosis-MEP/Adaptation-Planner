@@ -943,7 +943,7 @@ class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStre
         create_choices_plan_mocked.side_effect = ['w-choices1', 'w-choices2', 'w-choices3']
         expected_scheduling_strategy_plan = {
             'strategy': {
-                'name': 'weigted_random',
+                'name': 'weighted_random',
                 'dataflows': dataflows
             }
         }
