@@ -7,7 +7,8 @@ from event_service_utils.tracing.jaeger import init_tracer
 from adaptation_planner.planners.scheduling import (
     SimpleFixedSchedulerPlanner,
     MaxEnergyForQueueLimitSchedulerPlanner,
-    WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner
+    WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner,
+    RandomSchedulerPlanner
 )
 
 from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
@@ -59,7 +60,10 @@ class AdaptationPlanner(BaseTracerService):
             ),
             'weighted_random': WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-            )
+            ),
+            'random': RandomSchedulerPlanner(
+                self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
+            ),
         }
 
         self.scheduler_planner = self.available_scheduler_planners[self.scheduler_planner_type]

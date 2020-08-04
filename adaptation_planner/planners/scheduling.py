@@ -930,3 +930,12 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
         elif plan['stage'] == self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:
             plan = self.plan_stage_waiting_knowledge_queries(cause, plan)
         return plan
+
+
+class RandomSchedulerPlanner(WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner):
+
+    def create_scheduling_plan(self):
+        scheduling_plan = super(RandomSchedulerPlanner, self).create_scheduling_plan()
+        strategy_name = 'random'
+        scheduling_plan['strategy']['name'] = strategy_name
+        return scheduling_plan
