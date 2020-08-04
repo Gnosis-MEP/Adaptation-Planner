@@ -212,6 +212,11 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                     ],
                     [
                         "http://gnosis-mep.org/service_worker/object-detection-ssd-data",
+                        "http://gnosis-mep.org/service_worker#energy_consumption",
+                        "10.0"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-data",
                         "http://gnosis-mep.org/service_worker#queue_space_percent",
                         "1.0"
                     ],
@@ -267,6 +272,11 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                     ],
                     [
                         "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
+                        "http://gnosis-mep.org/service_worker#energy_consumption",
+                        "20.0"
+                    ],
+                    [
+                        "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
                         "http://gnosis-mep.org/service_worker#service_type",
                         "ObjectDetection"
                     ],
@@ -299,6 +309,7 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
             "ObjectDetection": {
                 "object-detection-ssd-data": {
                     "monitoring": {
+                        "energy_consumption": '10.0',
                         "type": "http://gnosis-mep.org/service_worker",
                         "queue_limit": 100,
                         "queue_space_percent": 1.0,
@@ -311,12 +322,13 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                             "queue_space": 100
                         },
                         "usage": {
-                            "energy_consumption": 188.0,
+                            "energy_consumption": 10.0
                         }
                     }
                 },
                 "object-detection-ssd-gpu-data": {
                     "monitoring": {
+                        "energy_consumption": '20.0',
                         "queue_limit": 100,
                         "service_type": "ObjectDetection",
                         "type": "http://gnosis-mep.org/service_worker",
@@ -329,7 +341,7 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                             "queue_space": 90
                         },
                         "usage": {
-                            "energy_consumption": 163.8,
+                            "energy_consumption": 20.0
                         }
                     }
                 }
@@ -347,7 +359,8 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                     "resources": {
                         "planned": {
                             "queue_space": 100
-                        }
+                        },
+                        "usage": {}
                     }
                 }
             }
