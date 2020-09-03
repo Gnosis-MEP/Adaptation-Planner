@@ -939,3 +939,10 @@ class RandomSchedulerPlanner(WeightedRandomMaxEnergyForQueueLimitSchedulerPlanne
         strategy_name = 'random'
         scheduling_plan['strategy']['name'] = strategy_name
         return scheduling_plan
+
+    def get_service_nonfloaded_workers(self, service, min_queue_space_percent):
+        worker_pool = self.all_services_worker_pool[service]
+        return list(map(
+            lambda kv: (service, kv[0], 0),
+            worker_pool.items()
+        ))
