@@ -655,7 +655,7 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
         # rating = space_perc * (1 / energy)
         # the lower the energy consumption the higher the rating
         # the higher the space, the higher the rating
-        rating = queue_space_percentage / energy_consumption
+        rating = queue_space_percentage / (energy_consumption**2)
         return rating
 
     def get_service_nonfloaded_workers(self, service, min_queue_space_percent):

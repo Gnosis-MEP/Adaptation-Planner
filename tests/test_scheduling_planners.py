@@ -713,7 +713,7 @@ class TestWeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStre
             }
         }
         weight = self.service.scheduler_planner.get_worker_choice_weight(worker)
-        expected = 0.05
+        expected = 0.005
         self.assertEqual(expected, weight)
 
     def test_get_dataflow_choice_weight(self):
