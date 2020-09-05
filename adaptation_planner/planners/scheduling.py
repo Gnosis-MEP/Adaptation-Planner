@@ -946,3 +946,17 @@ class RandomSchedulerPlanner(WeightedRandomMaxEnergyForQueueLimitSchedulerPlanne
             lambda kv: (service, kv[0], 0),
             worker_pool.items()
         ))
+
+    def update_workers_planned_resources(self, dataflow_choice_weighted, dataflow_weight, total_cum_weight, min_queue_space_percent):
+        # Change of getting this dataflow
+        cum_weight, dataflow = dataflow_choice_weighted
+
+        rate_worker_usage = len(dataflow)
+        resource_usage_rating = (dataflow_weight / rate_worker_usage)
+
+        # change of getting best dataflow times the expected usage before a new plan would be required
+        resource_usage = resource_usage_rating * min_queue_space_percent
+        for worker in dataflow:
+            service_type, worker_key, _ = worker
+            actual_worker_reference = self.all_services_worker_pool[service_type][worker_key]
+            self.update_worker_planned_resource(actual_worker_reference, resource_usage)
