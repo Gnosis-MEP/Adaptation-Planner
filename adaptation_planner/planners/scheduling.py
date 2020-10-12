@@ -366,7 +366,6 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
             lambda x: self.calculate_worker_queue_space_percentage(x[1]) >= min_queue_space_percent, worker_pool.items()
         ))
 
-
     def workers_keys_sorted_by_best_energy_consumption(self, worker_pool):
         sorted_workers = sorted(
             worker_pool.keys(), key=lambda w_key: worker_pool[w_key]['resources']['usage']['energy_consumption']
@@ -394,16 +393,16 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         for service in required_services:
             worker_pool = self.all_services_worker_pool[service]
             non_floaded_worker_pool = self.get_non_floaded_queue_workers(worker_pool, min_queue_space_percent)
-            if len(worker_pool) == 0:
-                best_worker_key = random.choice(list(worker_pool.keys()))
-            energy_sorted_workers_keys = self.workers_keys_sorted_by_best_energy_consumption(non_floaded_worker_pool)
+            selected_worker_pool = non_floaded_worker_pool
+            if len(selected_worker_pool) == 0:
+                selected_worker_pool = worker_pool
+            energy_sorted_workers_keys = self.workers_keys_sorted_by_best_energy_consumption(selected_worker_pool)
             best_worker_key = energy_sorted_workers_keys[0]
             buffer_stream_plan.append([best_worker_key])
             worker_pool[best_worker_key] = self.update_worker_planned_resource(
                 worker_pool[best_worker_key], min_queue_space_percent
             )
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
-        # return [['object-detection-ssd-gpu-data'], ['wm-data']]
         return buffer_stream_plan
 
     def create_scheduling_plan(self):
