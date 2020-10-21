@@ -1,6 +1,5 @@
 import functools
 import itertools
-import random
 
 
 class SimpleFixedSchedulerPlanner(object):
@@ -158,13 +157,20 @@ class SimpleFixedSchedulerPlanner(object):
     def plan_stage_waiting_knowledge_queries(self, cause, plan):
         ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
         if self.parent_service.check_ongoing_knowledge_queries_are_done(ongoing_knowledge_queries):
-            self.prepare_data_structures_from_knowledge_queries_data(ongoing_knowledge_queries)
-            plan['ongoing_knowledge_queries'] = {}
-            execution_plan = self.create_scheduling_plan()
-            plan['execution_plan'] = execution_plan
-            plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
-            self.parent_service.last_executed = plan
-            self.send_plan_to_scheduler(execution_plan)
+            try:
+                self.prepare_data_structures_from_knowledge_queries_data(ongoing_knowledge_queries)
+            except Exception as e:
+                self.parent_service.logger.warning(
+                    "Could not prepare the data structures from the Knowledge queries data. Will ignore this planning request"
+                )
+                self.parent_service.logger.exception(e)
+            else:
+                plan['ongoing_knowledge_queries'] = {}
+                execution_plan = self.create_scheduling_plan()
+                plan['execution_plan'] = execution_plan
+                plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
+                self.parent_service.last_executed = plan
+                self.send_plan_to_scheduler(execution_plan)
         else:
             pass
 
@@ -529,13 +535,20 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
     def plan_stage_waiting_knowledge_queries(self, cause, plan):
         ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
         if self.parent_service.check_ongoing_knowledge_queries_are_done(ongoing_knowledge_queries):
-            self.prepare_data_structures_from_knowledge_queries_data(ongoing_knowledge_queries)
-            plan['ongoing_knowledge_queries'] = {}
-            execution_plan = self.create_scheduling_plan()
-            plan['execution_plan'] = execution_plan
-            plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
-            self.parent_service.last_executed = plan
-            self.send_plan_to_scheduler(execution_plan)
+            try:
+                self.prepare_data_structures_from_knowledge_queries_data(ongoing_knowledge_queries)
+            except Exception as e:
+                self.parent_service.logger.warning(
+                    "Could not prepare the data structures from the Knowledge queries data. Will ignore this planning request"
+                )
+                self.parent_service.logger.exception(e)
+            else:
+                plan['ongoing_knowledge_queries'] = {}
+                execution_plan = self.create_scheduling_plan()
+                plan['execution_plan'] = execution_plan
+                plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
+                self.parent_service.last_executed = plan
+                self.send_plan_to_scheduler(execution_plan)
         else:
             pass
 
@@ -593,6 +606,8 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
     # ----------------mocked since we don't have this yet
 
     def get_query_required_services(self, query):
+        if 'destination_id' in query.keys():
+            return list(set(filter(lambda x: x != 'WindowManager', query['destination_id'])))
         services = [('object_detection', 'ObjectDetection')]
 
         required_services = []
@@ -801,7 +816,7 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
             query_id = subj.split('/')[-1]
             attribute = pred.split('#')[-1]
             value = obj
-            self.all_queries.setdefault(query_id, {})
+            self.all_queries.setdefault(query_id, {'destination_id': []})
             if attribute == 'query':
                 attribute = 'query_text'
 
@@ -886,14 +901,21 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
     def plan_stage_waiting_knowledge_queries(self, cause, plan):
         ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
         if self.parent_service.check_ongoing_knowledge_queries_are_done(ongoing_knowledge_queries):
-            self.prepare_data_structures_from_knowledge_queries_data(ongoing_knowledge_queries)
-            plan['ongoing_knowledge_queries'] = {}
-            execution_plan = self.create_scheduling_plan()
-            plan['execution_plan'] = execution_plan
-            plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
-            self.parent_service.last_executed = plan
-            self.send_plan_to_scheduler(execution_plan)
-            # self.parent_service.logger.info(f'Current service workers info: {self.all_services_worker_pool}')
+            try:
+                self.prepare_data_structures_from_knowledge_queries_data(ongoing_knowledge_queries)
+            except Exception as e:
+                self.parent_service.logger.warning(
+                    "Could not prepare the data structures from the Knowledge queries data. Will ignore this planning request"
+                )
+                self.parent_service.logger.exception(e)
+            else:
+                plan['ongoing_knowledge_queries'] = {}
+                execution_plan = self.create_scheduling_plan()
+                plan['execution_plan'] = execution_plan
+                plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
+                self.parent_service.last_executed = plan
+                self.send_plan_to_scheduler(execution_plan)
+                # self.parent_service.logger.info(f'Current service workers info: {self.all_services_worker_pool}')
         else:
             pass
 
