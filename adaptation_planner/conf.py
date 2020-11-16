@@ -15,6 +15,8 @@ MOCKED_OD_STREAM_KEY = config('MOCKED_OD_STREAM_KEY', default='object-detection-
 
 SCHEDULER_PLANNER_TYPE = config('SCHEDULER_PLANNER_TYPE', default='single_best')
 
+QUERY_SERVICE_CHAIN_FIELD = config('QUERY_SERVICE_CHAIN_FIELD', default='data_flow')
+
 SERVICE_STREAM_KEY = config('SERVICE_STREAM_KEY')
 SERVICE_CMD_KEY = config('SERVICE_CMD_KEY')
 

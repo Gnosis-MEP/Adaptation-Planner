@@ -1,5 +1,6 @@
 import functools
 import itertools
+from ..conf import QUERY_SERVICE_CHAIN_FIELD
 
 
 class SimpleFixedSchedulerPlanner(object):
@@ -24,6 +25,9 @@ class SimpleFixedSchedulerPlanner(object):
     # ----------------mocked since we don't have this yet
 
     def get_query_required_services(self, query):
+        if QUERY_SERVICE_CHAIN_FIELD in query.keys():
+            return list(set(filter(lambda x: x != 'WindowManager', query[QUERY_SERVICE_CHAIN_FIELD])))
+
         services = [('object_detection', 'ObjectDetection')]
 
         required_services = []
@@ -336,6 +340,8 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
     # ----------------mocked since we don't have this yet
 
     def get_query_required_services(self, query):
+        if QUERY_SERVICE_CHAIN_FIELD in query.keys():
+            return list(set(filter(lambda x: x != 'WindowManager', query[QUERY_SERVICE_CHAIN_FIELD])))
         services = [('object_detection', 'ObjectDetection')]
 
         required_services = []
@@ -606,8 +612,9 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
     # ----------------mocked since we don't have this yet
 
     def get_query_required_services(self, query):
-        if 'destination_id' in query.keys():
-            return list(set(filter(lambda x: x != 'WindowManager', query['destination_id'])))
+
+        if QUERY_SERVICE_CHAIN_FIELD in query.keys():
+            return list(set(filter(lambda x: x != 'WindowManager', query[QUERY_SERVICE_CHAIN_FIELD])))
         services = [('object_detection', 'ObjectDetection')]
 
         required_services = []
