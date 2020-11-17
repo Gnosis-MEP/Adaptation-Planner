@@ -109,7 +109,7 @@ class SimpleFixedSchedulerPlanner(object):
             query_id = subj.split('/')[-1]
             attribute = pred.split('#')[-1]
             value = obj
-            self.all_queries.setdefault(query_id, {})
+            self.all_queries.setdefault(query_id, {QUERY_SERVICE_CHAIN_FIELD: []})
             if attribute == 'query':
                 attribute = 'query_text'
 
@@ -456,7 +456,7 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
             query_id = subj.split('/')[-1]
             attribute = pred.split('#')[-1]
             value = obj
-            self.all_queries.setdefault(query_id, {})
+            self.all_queries.setdefault(query_id, {QUERY_SERVICE_CHAIN_FIELD: []})
             if attribute == 'query':
                 attribute = 'query_text'
 
@@ -823,7 +823,7 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
             query_id = subj.split('/')[-1]
             attribute = pred.split('#')[-1]
             value = obj
-            self.all_queries.setdefault(query_id, {'destination_id': []})
+            self.all_queries.setdefault(query_id, {QUERY_SERVICE_CHAIN_FIELD: []})
             if attribute == 'query':
                 attribute = 'query_text'
 
