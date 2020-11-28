@@ -676,6 +676,8 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
         # rating = space_perc * (1 / energy)
         # the lower the energy consumption the higher the rating
         # the higher the space, the higher the rating
+        if queue_space_percentage < 0:
+            queue_space_percentage = 0.001
         rating = queue_space_percentage / (energy_consumption**2)
         return rating
 
