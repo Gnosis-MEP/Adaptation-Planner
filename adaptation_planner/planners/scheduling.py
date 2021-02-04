@@ -142,6 +142,37 @@ class BaseSchedulerPlanner(object):
                     ]
                 self.all_buffer_streams[buffer_stream_key][attribute].append(value)
 
+    def prepare_local_services_with_workers(self, knowledge_queries):
+        query_ref = next(filter(lambda q: 'gnosis-mep:service_worker' in q, knowledge_queries))
+        query = knowledge_queries[query_ref]
+        data_triples = query['data']
+        workers = {}
+        for subj, pred, obj in data_triples:
+            worker_id = subj.split('/')[-1]
+            attribute = pred.split('#')[-1]
+            value = obj
+            if attribute in ['queue_space', 'queue_limit']:
+                value = int(value)
+            elif attribute in ['queue_space_percent']:
+                value = float(value)
+
+            worker_monitoring_dict = workers.setdefault(worker_id, {})
+            worker_monitoring_dict[attribute] = value
+
+        for worker_id, worker_monitoring_dict in workers.items():
+            service_type = worker_monitoring_dict['service_type']
+            service_dict = self.all_services_worker_pool.setdefault(service_type, {})
+
+            service_worker_dict = service_dict.setdefault(worker_id, {})
+            service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
+            service_worker_dict_monitoring.update(worker_monitoring_dict)
+            service_worker_dict_resources = service_worker_dict.setdefault('resources', {'planned': {}, 'usage': {}})
+            service_worker_dict_resources['planned']['queue_space'] = service_worker_dict_monitoring['queue_space']
+            if 'energy_consumption' in service_worker_dict_monitoring:
+                service_worker_dict_resources['usage']['energy_consumption'] = float(
+                    service_worker_dict_monitoring['energy_consumption']
+                )
+
     def plan_stage_waiting_knowledge_queries(self, cause, plan):
         ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
         if self.parent_service.check_ongoing_knowledge_queries_are_done(ongoing_knowledge_queries):
@@ -198,10 +229,8 @@ class BaseSchedulerPlanner(object):
 
 class SimpleFixedSchedulerPlanner(BaseSchedulerPlanner):
     """
-        Weighted random planner that prepares a list of choises
-        for the scheduler to randomize from for each buffer stream.
-        The scheduler randomization utilizes the weights defined by this planner,
-        which is basically a the inverse of the total sum of energy consumption for that dataflow choise.
+        This is the very basic scheduler, which, based on the mocked object detection stream key configuration,
+        it will always use that as the only available destination for events scheduled
     """
 
     def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key, mocked_od_stream_key):
@@ -233,50 +262,22 @@ class SimpleFixedSchedulerPlanner(BaseSchedulerPlanner):
         return [buffer_stream_plan]
 
 
-class MaxEnergyForQueueLimitSchedulerPlanner(object):
-    """Based on VideoEdge"""
+class MaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner):
+    """
+    Based on VideoEdge, limits queue size to reduce latency, and total execution time.
+    Overloaded workers (>70% queue size) are not considered as valid workers
+    (unless all workers are overloaded, then all are considered)
+    from the list of valid workers for each bufferstream required service dataflow,
+    the planner selects only the best one in terms of energy consumption
+    """
 
     def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key):
-        super(MaxEnergyForQueueLimitSchedulerPlanner, self).__init__()
-        self.parent_service = parent_service
-        self.scheduler_cmd_stream = self.parent_service.get_destination_streams(scheduler_cmd_stream_key)
-        self.ce_endpoint_stream_key = ce_endpoint_stream_key
-        self.all_services_worker_pool = {}
-        self.all_buffer_streams = {}
-        self.all_queries = {}
-
-    # ----------------mocked since we don't have this yet
-
-    def get_query_required_services(self, query):
-        if QUERY_SERVICE_CHAIN_FIELD in query.keys():
-            return list(set(filter(lambda x: x != 'WindowManager', query[QUERY_SERVICE_CHAIN_FIELD])))
-        services = [('object_detection', 'ObjectDetection')]
-
-        required_services = []
-        for service in services:
-            if service[0] in query['query_text'].lower():
-                required_services.append(service[1])
-
-        return required_services
-
-    def ask_knowledge_for_all_entities_of_namespace(self, namespace):
-        k_query_text = """
-        SELECT DISTINCT ?s ?p ?o
-            WHERE {
-                ?s ?p ?o.
-                ?s rdf:type ?t.
-            }
-        """
-        query = {
-            'query_text': k_query_text,
-            'bindings': {
-                't': namespace,  # 'gnosis-mep:buffer_stream'
-            },
-            # for simple internal reference of this query.
-            'query_ref': f'{self.parent_service.service_based_random_event_id()}-{namespace}',
-        }
-        self.parent_service.query_knowledge(query)
-        return query
+        super(MaxEnergyForQueueLimitSchedulerPlanner, self).__init__(
+            parent_service,
+            scheduler_cmd_stream_key,
+            ce_endpoint_stream_key
+        )
+        self.strategy_name = 'single_best'
 
     def calculate_worker_queue_space_percentage(self, worker):
         return worker['resources']['planned']['queue_space'] / worker['monitoring']['queue_limit']
@@ -297,13 +298,6 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         planned_usage = int(worker['monitoring']['queue_limit'] * (min_queue_space_percent))
         worker['resources']['planned']['queue_space'] -= planned_usage
         return worker
-
-    def get_buffer_stream_required_services(self, buffer_stream_entity):
-        required_services = []
-        for query in buffer_stream_entity['queries'].values():
-            required_services.extend(self.get_query_required_services(query))
-
-        return required_services
 
     def create_buffer_stream_plan(self, buffer_stream_entity):
         required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
@@ -325,182 +319,8 @@ class MaxEnergyForQueueLimitSchedulerPlanner(object):
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
         return buffer_stream_plan
 
-    def create_scheduling_plan(self):
-        strategy_name = 'single_best'
-        scheduling_dataflows = {}
-        for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
-            buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
-            plan_cum_weight = None
-            scheduling_dataflows[buffer_stream_key] = [(plan_cum_weight, buffer_stream_plan)]
 
-        return {
-            'strategy': {
-                'name': strategy_name,
-                'dataflows': scheduling_dataflows
-            }
-        }
-
-    def plan_stage_preparation_start(self, cause, plan):
-        plan['stage'] = self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES
-        ongoing_knowledge_queries = plan.setdefault('ongoing_knowledge_queries', {})
-
-        queries_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:subscriber_query')
-        ongoing_knowledge_queries[queries_knowledge_query['query_ref']] = queries_knowledge_query
-
-        buffers_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:buffer_stream')
-        ongoing_knowledge_queries[buffers_knowledge_query['query_ref']] = buffers_knowledge_query
-
-        services_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:service_worker')
-        ongoing_knowledge_queries[services_knowledge_query['query_ref']] = services_knowledge_query
-        return plan
-
-    def prepare_local_queries_entities(self, knowledge_queries):
-        # get the query about the subscriber_query
-        query_ref = next(filter(lambda q: 'gnosis-mep:subscriber_query' in q, knowledge_queries))
-        query = knowledge_queries[query_ref]
-        data_triples = query['data']
-
-        for subj, pred, obj in data_triples:
-            query_id = subj.split('/')[-1]
-            attribute = pred.split('#')[-1]
-            value = obj
-            self.all_queries.setdefault(query_id, {QUERY_SERVICE_CHAIN_FIELD: []})
-            if attribute == 'query':
-                attribute = 'query_text'
-
-            if attribute not in self.all_queries[query_id].keys():
-                self.all_queries[query_id][attribute] = value
-            else:
-                if not isinstance(self.all_queries[query_id][attribute], list):
-                    self.all_queries[query_id][attribute] = [
-                        self.all_queries[query_id][attribute]
-                    ]
-                self.all_queries[query_id][attribute].append(value)
-
-    def prepare_local_buffer_stream_entities(self, knowledge_queries):
-        # get the query about the buffer streams
-        query_ref = next(filter(lambda q: 'gnosis-mep:buffer_stream' in q, knowledge_queries))
-        query = knowledge_queries[query_ref]
-        data_triples = query['data']
-        # subject_sorted_triples = sorted(data_triples, key=lambda t: t[0])
-        # buffer_stream_keys = set([o for s, p, o in subject_sorted_triples if '#buffer_stream_key' in p])
-        buffer_entity_id_stream_key_map = dict(
-            [(s, o) for s, p, o in data_triples if '#buffer_stream_key' in p])
-
-        for subj, pred, obj in data_triples:
-            buffer_stream_key = buffer_entity_id_stream_key_map[subj]
-            attribute = pred.split('#')[-1]
-            value = obj
-            self.all_buffer_streams.setdefault(buffer_stream_key, {})
-            if attribute == 'query_ids':
-                queries = self.all_buffer_streams[buffer_stream_key].setdefault('queries', {})
-                query_id = value.split('/')[-1]
-                queries[query_id] = self.all_queries[query_id]
-                continue
-
-            if attribute not in self.all_buffer_streams[buffer_stream_key].keys():
-                self.all_buffer_streams[buffer_stream_key][attribute] = value
-            else:
-                if not isinstance(self.all_buffer_streams[buffer_stream_key][attribute], list):
-                    self.all_buffer_streams[buffer_stream_key][attribute] = [
-                        self.all_buffer_streams[buffer_stream_key][attribute]
-                    ]
-                self.all_buffer_streams[buffer_stream_key][attribute].append(value)
-
-    def prepare_local_services_with_workers(self, knowledge_queries):
-        query_ref = next(filter(lambda q: 'gnosis-mep:service_worker' in q, knowledge_queries))
-        query = knowledge_queries[query_ref]
-        data_triples = query['data']
-        workers = {}
-        for subj, pred, obj in data_triples:
-            worker_id = subj.split('/')[-1]
-            attribute = pred.split('#')[-1]
-            value = obj
-            if attribute in ['queue_space', 'queue_limit']:
-                value = int(value)
-            elif attribute in ['queue_space_percent']:
-                value = float(value)
-
-            worker_monitoring_dict = workers.setdefault(worker_id, {})
-            worker_monitoring_dict[attribute] = value
-
-        for worker_id, worker_monitoring_dict in workers.items():
-            service_type = worker_monitoring_dict['service_type']
-            service_dict = self.all_services_worker_pool.setdefault(service_type, {})
-
-            service_worker_dict = service_dict.setdefault(worker_id, {})
-            service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
-            service_worker_dict_monitoring.update(worker_monitoring_dict)
-            service_worker_dict_resources = service_worker_dict.setdefault('resources', {'planned': {}, 'usage': {}})
-            service_worker_dict_resources['planned']['queue_space'] = service_worker_dict_monitoring['queue_space']
-            if 'energy_consumption' in service_worker_dict_monitoring:
-                service_worker_dict_resources['usage']['energy_consumption'] = float(
-                    service_worker_dict_monitoring['energy_consumption']
-                )
-
-    def prepare_data_structures_from_knowledge_queries_data(self, ongoing_knowledge_queries):
-        self.all_queries = {}
-        self.all_buffer_streams = {}
-        self.all_services_worker_pool = {}
-        self.prepare_local_queries_entities(ongoing_knowledge_queries)
-        self.prepare_local_services_with_workers(ongoing_knowledge_queries)
-        self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
-
-    def plan_stage_waiting_knowledge_queries(self, cause, plan):
-        ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
-        if self.parent_service.check_ongoing_knowledge_queries_are_done(ongoing_knowledge_queries):
-            try:
-                self.prepare_data_structures_from_knowledge_queries_data(ongoing_knowledge_queries)
-            except Exception as e:
-                self.parent_service.logger.warning(
-                    "Could not prepare the data structures from the Knowledge queries data. Will ignore this planning request"
-                )
-                self.parent_service.logger.exception(e)
-            else:
-                plan['ongoing_knowledge_queries'] = {}
-                execution_plan = self.create_scheduling_plan()
-                plan['execution_plan'] = execution_plan
-                plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
-                self.parent_service.last_executed = plan
-                self.send_plan_to_scheduler(execution_plan)
-        else:
-            pass
-
-        return plan
-
-    def send_plan_to_scheduler(self, adaptive_plan):
-        new_event_data = {
-            'id': self.parent_service.service_based_random_event_id(),
-            'action': 'executeAdaptivePlan',
-        }
-        new_event_data.update(adaptive_plan)
-        self.parent_service.logger.debug(f'Sending event "{new_event_data}" to Scheduler')
-        self.parent_service.write_event_with_trace(new_event_data, self.scheduler_cmd_stream)
-
-    def plan(self, change_request=None, plan=None):
-        if plan is None:
-            plan = {}
-            plan.update({
-                'type': 'reSchedulingPlan',
-                'execution_plan': None,
-                'executor': self.scheduler_cmd_stream,
-                'change_request': change_request
-            })
-            plan = self.parent_service.prepare_plan(plan)
-
-        if change_request is None:
-            change_request = plan['change_request']
-
-        cause = change_request['cause']
-        if plan['stage'] == self.parent_service.PLAN_STAGE_PREPARATION_START:
-            plan = self.plan_stage_preparation_start(cause, plan)
-
-        elif plan['stage'] == self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:
-            plan = self.plan_stage_waiting_knowledge_queries(cause, plan)
-        return plan
-
-
-class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
+class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner):
     """
         Weighted random planner that prepares a list of choises
         for the scheduler to randomize from for each buffer stream.
@@ -509,47 +329,12 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
     """
 
     def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key):
-        super(WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner, self).__init__()
-        self.parent_service = parent_service
-        self.scheduler_cmd_stream = self.parent_service.get_destination_streams(scheduler_cmd_stream_key)
-        self.ce_endpoint_stream_key = ce_endpoint_stream_key
-        self.all_services_worker_pool = {}
-        self.all_buffer_streams = {}
-        self.all_queries = {}
-
-    # ----------------mocked since we don't have this yet
-
-    def get_query_required_services(self, query):
-
-        if QUERY_SERVICE_CHAIN_FIELD in query.keys():
-            return list(set(filter(lambda x: x != 'WindowManager', query[QUERY_SERVICE_CHAIN_FIELD])))
-        services = [('object_detection', 'ObjectDetection')]
-
-        required_services = []
-        for service in services:
-            if service[0] in query['query_text'].lower():
-                required_services.append(service[1])
-
-        return required_services
-
-    def ask_knowledge_for_all_entities_of_namespace(self, namespace):
-        k_query_text = """
-        SELECT DISTINCT ?s ?p ?o
-            WHERE {
-                ?s ?p ?o.
-                ?s rdf:type ?t.
-            }
-        """
-        query = {
-            'query_text': k_query_text,
-            'bindings': {
-                't': namespace,  # 'gnosis-mep:buffer_stream'
-            },
-            # for simple internal reference of this query.
-            'query_ref': f'{self.parent_service.service_based_random_event_id()}-{namespace}',
-        }
-        self.parent_service.query_knowledge(query)
-        return query
+        super(WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner, self).__init__(
+            parent_service,
+            scheduler_cmd_stream_key,
+            ce_endpoint_stream_key
+        )
+        self.strategy_name = 'weighted_random'
 
     def calculate_worker_queue_space_percentage(self, worker):
         return worker['resources']['planned']['queue_space'] / worker['monitoring']['queue_limit']
@@ -570,13 +355,6 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
         planned_usage = int(worker['monitoring']['queue_limit'] * (min_queue_space_percent))
         worker['resources']['planned']['queue_space'] -= planned_usage
         return worker
-
-    def get_buffer_stream_required_services(self, buffer_stream_entity):
-        required_services = []
-        for query in buffer_stream_entity['queries'].values():
-            required_services.extend(self.get_query_required_services(query))
-
-        return required_services
 
     def get_worker_choice_weight(self, worker):
         energy_consumption = worker['resources']['usage']['energy_consumption']
@@ -695,178 +473,6 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
             dataflow_choices_with_cum_weights)
 
         return cleaned_dataflow_choices_with_cum_weights
-
-    def create_scheduling_plan(self):
-        strategy_name = 'weighted_random'
-        scheduling_dataflows = {}
-        for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
-            buffer_stream_plan = self.create_buffer_stream_choices_plan(buffer_stream_entity)
-            scheduling_dataflows[buffer_stream_key] = buffer_stream_plan
-        return {
-            'strategy': {
-                'name': strategy_name,
-                'dataflows': scheduling_dataflows
-            }
-        }
-
-    def plan_stage_preparation_start(self, cause, plan):
-        plan['stage'] = self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES
-        ongoing_knowledge_queries = plan.setdefault('ongoing_knowledge_queries', {})
-
-        queries_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:subscriber_query')
-        ongoing_knowledge_queries[queries_knowledge_query['query_ref']] = queries_knowledge_query
-
-        buffers_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:buffer_stream')
-        ongoing_knowledge_queries[buffers_knowledge_query['query_ref']] = buffers_knowledge_query
-
-        services_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:service_worker')
-        ongoing_knowledge_queries[services_knowledge_query['query_ref']] = services_knowledge_query
-        return plan
-
-    def prepare_local_queries_entities(self, knowledge_queries):
-        # get the query about the subscriber_query
-        query_ref = next(filter(lambda q: 'gnosis-mep:subscriber_query' in q, knowledge_queries))
-        query = knowledge_queries[query_ref]
-        data_triples = query['data']
-
-        for subj, pred, obj in data_triples:
-            query_id = subj.split('/')[-1]
-            attribute = pred.split('#')[-1]
-            value = obj
-            self.all_queries.setdefault(query_id, {QUERY_SERVICE_CHAIN_FIELD: []})
-            if attribute == 'query':
-                attribute = 'query_text'
-
-            if attribute not in self.all_queries[query_id].keys():
-                self.all_queries[query_id][attribute] = value
-            else:
-                if not isinstance(self.all_queries[query_id][attribute], list):
-                    self.all_queries[query_id][attribute] = [
-                        self.all_queries[query_id][attribute]
-                    ]
-                self.all_queries[query_id][attribute].append(value)
-
-    def prepare_local_buffer_stream_entities(self, knowledge_queries):
-        # get the query about the buffer streams
-        query_ref = next(filter(lambda q: 'gnosis-mep:buffer_stream' in q, knowledge_queries))
-        query = knowledge_queries[query_ref]
-        data_triples = query['data']
-        # subject_sorted_triples = sorted(data_triples, key=lambda t: t[0])
-        # buffer_stream_keys = set([o for s, p, o in subject_sorted_triples if '#buffer_stream_key' in p])
-        buffer_entity_id_stream_key_map = dict(
-            [(s, o) for s, p, o in data_triples if '#buffer_stream_key' in p])
-
-        for subj, pred, obj in data_triples:
-            buffer_stream_key = buffer_entity_id_stream_key_map[subj]
-            attribute = pred.split('#')[-1]
-            value = obj
-            self.all_buffer_streams.setdefault(buffer_stream_key, {})
-            if attribute == 'query_ids':
-                queries = self.all_buffer_streams[buffer_stream_key].setdefault('queries', {})
-                query_id = value.split('/')[-1]
-                queries[query_id] = self.all_queries[query_id]
-                continue
-
-            if attribute not in self.all_buffer_streams[buffer_stream_key].keys():
-                self.all_buffer_streams[buffer_stream_key][attribute] = value
-            else:
-                if not isinstance(self.all_buffer_streams[buffer_stream_key][attribute], list):
-                    self.all_buffer_streams[buffer_stream_key][attribute] = [
-                        self.all_buffer_streams[buffer_stream_key][attribute]
-                    ]
-                self.all_buffer_streams[buffer_stream_key][attribute].append(value)
-
-    def prepare_local_services_with_workers(self, knowledge_queries):
-        query_ref = next(filter(lambda q: 'gnosis-mep:service_worker' in q, knowledge_queries))
-        query = knowledge_queries[query_ref]
-        data_triples = query['data']
-        workers = {}
-        for subj, pred, obj in data_triples:
-            worker_id = subj.split('/')[-1]
-            attribute = pred.split('#')[-1]
-            value = obj
-            if attribute in ['queue_space', 'queue_limit']:
-                value = int(value)
-            elif attribute in ['queue_space_percent']:
-                value = float(value)
-
-            worker_monitoring_dict = workers.setdefault(worker_id, {})
-            worker_monitoring_dict[attribute] = value
-
-        for worker_id, worker_monitoring_dict in workers.items():
-            service_type = worker_monitoring_dict['service_type']
-            service_dict = self.all_services_worker_pool.setdefault(service_type, {})
-
-            service_worker_dict = service_dict.setdefault(worker_id, {})
-            service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
-            service_worker_dict_monitoring.update(worker_monitoring_dict)
-            service_worker_dict_resources = service_worker_dict.setdefault('resources', {'planned': {}, 'usage': {}})
-            service_worker_dict_resources['planned']['queue_space'] = service_worker_dict_monitoring['queue_space']
-            if 'energy_consumption' in service_worker_dict_monitoring:
-                service_worker_dict_resources['usage']['energy_consumption'] = float(
-                    service_worker_dict_monitoring['energy_consumption']
-                )
-
-    def prepare_data_structures_from_knowledge_queries_data(self, ongoing_knowledge_queries):
-        self.all_queries = {}
-        self.all_buffer_streams = {}
-        self.all_services_worker_pool = {}
-        self.prepare_local_queries_entities(ongoing_knowledge_queries)
-        self.prepare_local_services_with_workers(ongoing_knowledge_queries)
-        self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
-
-    def plan_stage_waiting_knowledge_queries(self, cause, plan):
-        ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
-        if self.parent_service.check_ongoing_knowledge_queries_are_done(ongoing_knowledge_queries):
-            try:
-                self.prepare_data_structures_from_knowledge_queries_data(ongoing_knowledge_queries)
-            except Exception as e:
-                self.parent_service.logger.warning(
-                    "Could not prepare the data structures from the Knowledge queries data. Will ignore this planning request"
-                )
-                self.parent_service.logger.exception(e)
-            else:
-                plan['ongoing_knowledge_queries'] = {}
-                execution_plan = self.create_scheduling_plan()
-                plan['execution_plan'] = execution_plan
-                plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
-                self.parent_service.last_executed = plan
-                self.send_plan_to_scheduler(execution_plan)
-        else:
-            pass
-
-        return plan
-
-    def send_plan_to_scheduler(self, adaptive_plan):
-        new_event_data = {
-            'id': self.parent_service.service_based_random_event_id(),
-            'action': 'executeAdaptivePlan',
-        }
-        new_event_data.update(adaptive_plan)
-        self.parent_service.logger.debug(f'Sending event "{new_event_data}" to Scheduler')
-        self.parent_service.write_event_with_trace(new_event_data, self.scheduler_cmd_stream)
-
-    def plan(self, change_request=None, plan=None):
-        if plan is None:
-            plan = {}
-            plan.update({
-                'type': 'reSchedulingPlan',
-                'execution_plan': None,
-                'executor': self.scheduler_cmd_stream,
-                'change_request': change_request
-            })
-            plan = self.parent_service.prepare_plan(plan)
-
-        if change_request is None:
-            change_request = plan['change_request']
-
-        cause = change_request['cause']
-        if plan['stage'] == self.parent_service.PLAN_STAGE_PREPARATION_START:
-            plan = self.plan_stage_preparation_start(cause, plan)
-
-        elif plan['stage'] == self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:
-            plan = self.plan_stage_waiting_knowledge_queries(cause, plan)
-        return plan
 
 
 class RandomSchedulerPlanner(WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner):
