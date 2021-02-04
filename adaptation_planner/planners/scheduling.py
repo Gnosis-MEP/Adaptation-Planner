@@ -3,31 +3,23 @@ import itertools
 from ..conf import QUERY_SERVICE_CHAIN_FIELD
 
 
-class SimpleFixedSchedulerPlanner(object):
-    """
-        Weighted random planner that prepares a list of choises
-        for the scheduler to randomize from for each buffer stream.
-        The scheduler randomization utilizes the weights defined by this planner,
-        which is basically a the inverse of the total sum of energy consumption for that dataflow choise.
-    """
+class BaseSchedulerPlanner(object):
+    """Base class for scheduler planning"""
 
-    def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key, mocked_od_stream_key):
-        super(SimpleFixedSchedulerPlanner, self).__init__()
+    def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key):
+        super(BaseSchedulerPlanner, self).__init__()
         self.parent_service = parent_service
         self.scheduler_cmd_stream = self.parent_service.get_destination_streams(scheduler_cmd_stream_key)
         self.ce_endpoint_stream_key = ce_endpoint_stream_key
+        self.all_services_worker_pool = {}
         self.all_buffer_streams = {}
         self.all_queries = {}
-        self.mocked_od_stream_key = mocked_od_stream_key
-        self.services_to_streams = {
-            'ObjectDetection': self.mocked_od_stream_key
-        }
-    # ----------------mocked since we don't have this yet
 
     def get_query_required_services(self, query):
         if QUERY_SERVICE_CHAIN_FIELD in query.keys():
             return list(set(filter(lambda x: x != 'WindowManager', query[QUERY_SERVICE_CHAIN_FIELD])))
 
+        # backward compat so that if no service chain is present, we use a mocked one
         services = [('object_detection', 'ObjectDetection')]
 
         required_services = []
@@ -63,26 +55,14 @@ class SimpleFixedSchedulerPlanner(object):
 
         return required_services
 
-    def create_buffer_stream_plan(self, buffer_stream_entity):
-        required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
-        buffer_stream_plan = []
-        for service in required_services:
-            service_stream = self.services_to_streams[service]
-            buffer_stream_plan.append([service_stream])
-
-        buffer_stream_plan.append([self.ce_endpoint_stream_key])
-
-        return [None, buffer_stream_plan]
-
     def create_scheduling_plan(self):
-        strategy_name = 'single_best'
         scheduling_dataflows = {}
         for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
-            buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
-            scheduling_dataflows[buffer_stream_key] = [buffer_stream_plan]
+            buffer_stream_plan = self.create_buffer_stream_choices_plan(buffer_stream_entity)
+            scheduling_dataflows[buffer_stream_key] = buffer_stream_plan
         return {
             'strategy': {
-                'name': strategy_name,
+                'name': self.strategy_name,
                 'dataflows': scheduling_dataflows
             }
         }
@@ -97,7 +77,17 @@ class SimpleFixedSchedulerPlanner(object):
         buffers_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:buffer_stream')
         ongoing_knowledge_queries[buffers_knowledge_query['query_ref']] = buffers_knowledge_query
 
+        services_knowledge_query = self.ask_knowledge_for_all_entities_of_namespace('gnosis-mep:service_worker')
+        ongoing_knowledge_queries[services_knowledge_query['query_ref']] = services_knowledge_query
         return plan
+
+    def prepare_data_structures_from_knowledge_queries_data(self, ongoing_knowledge_queries):
+        self.all_queries = {}
+        self.all_buffer_streams = {}
+        self.all_services_worker_pool = {}
+        self.prepare_local_queries_entities(ongoing_knowledge_queries)
+        self.prepare_local_services_with_workers(ongoing_knowledge_queries)
+        self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
 
     def prepare_local_queries_entities(self, knowledge_queries):
         # get the query about the subscriber_query
@@ -151,12 +141,6 @@ class SimpleFixedSchedulerPlanner(object):
                         self.all_buffer_streams[buffer_stream_key][attribute]
                     ]
                 self.all_buffer_streams[buffer_stream_key][attribute].append(value)
-
-    def prepare_data_structures_from_knowledge_queries_data(self, ongoing_knowledge_queries):
-        self.all_queries = {}
-        self.all_buffer_streams = {}
-        self.prepare_local_queries_entities(ongoing_knowledge_queries)
-        self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
 
     def plan_stage_waiting_knowledge_queries(self, cause, plan):
         ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
@@ -212,27 +196,29 @@ class SimpleFixedSchedulerPlanner(object):
         return plan
 
 
-class SimpleFixedSchedulerPlannerBad(object):
+class SimpleFixedSchedulerPlanner(BaseSchedulerPlanner):
+    """
+        Weighted random planner that prepares a list of choises
+        for the scheduler to randomize from for each buffer stream.
+        The scheduler randomization utilizes the weights defined by this planner,
+        which is basically a the inverse of the total sum of energy consumption for that dataflow choise.
+    """
+
     def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key, mocked_od_stream_key):
+        super(SimpleFixedSchedulerPlanner, self).__init__(
+            parent_service,
+            scheduler_cmd_stream_key,
+            ce_endpoint_stream_key
+        )
 
-        super(SimpleFixedSchedulerPlanner, self).__init__()
-        self.parent_service = parent_service
-        self.scheduler_cmd_stream = self.parent_service.get_destination_streams(scheduler_cmd_stream_key)
-        self.ce_endpoint_stream_key = ce_endpoint_stream_key
-
+        self.strategy_name = 'single_best'
+        self.mocked_od_stream_key = mocked_od_stream_key
         self.services_to_streams = {
-            'object_detection': mocked_od_stream_key
+            'ObjectDetection': self.mocked_od_stream_key
         }
 
-    #-- Mocked data until we have this info somewere
-    def get_queries_required_services(self, query_text_list):
-        required_services = []
-        if any(['object_detection' in query_text.lower() for query_text in query_text_list]):
-            required_services.append('object_detection')
-        return required_services
-    #-- end of mocked data
-
-    def build_buffer_stream_plan_from_required_services(self, buffer_stream_key, required_services):
+    def create_buffer_stream_plan(self, buffer_stream_entity):
+        required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
         buffer_stream_plan = []
         for service in required_services:
             service_stream = self.services_to_streams[service]
@@ -240,89 +226,11 @@ class SimpleFixedSchedulerPlannerBad(object):
 
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
 
-        return {
-            'dataflow': {
-                buffer_stream_key: buffer_stream_plan,
-            }
-        }
+        return [None, buffer_stream_plan]
 
-    def ask_knowledge_for_queries_text_from_ids(self, query_ids):
-        # only get first query for now, since there's no diff in geting more than one for the same buffer
-        k_query_text = "SELECT DISTINCT ?o WHERE {?s ?p ?o.}"
-        query = {
-            'query_text': k_query_text,
-            'bindings': {
-                's': query_ids[0],
-                'p': 'gnosis-mep:subscriber_query#query'
-            },
-            # for simple internal reference of this query.
-            'query_ref': self.parent_service.service_based_random_event_id(),
-        }
-        self.parent_service.query_knowledge(query)
-        return query
-
-    def plan_stage_preparation_start(self, cause, plan):
-        buffer_stream_entity = cause
-        query_ids = buffer_stream_entity['gnosis-mep:buffer_stream#query_ids']
-        knowledge_query = self.ask_knowledge_for_queries_text_from_ids(query_ids)
-
-        plan['stage'] = self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES
-        knowledge_queries = plan.setdefault('ongoing_knowledge_queries', {})
-        query_ref = knowledge_query['query_ref']
-        knowledge_queries[query_ref] = knowledge_query
-        return plan
-
-    def plan_stage_waiting_kowledge(self, cause, plan):
-        buffer_stream_entity = cause
-        if self.parent_service.check_ongoing_knowledge_queries_are_done(plan.get('ongoing_knowledge_queries', {})):
-            k_response = list(plan['ongoing_knowledge_queries'].values())[0].get('data', [])
-            plan['ongoing_knowledge_queries'] = {}
-            query_text_list = [t[0] for t in k_response]
-
-            required_services = self.get_queries_required_services(query_text_list)
-            buffer_stream_key = buffer_stream_entity['gnosis-mep:buffer_stream#buffer_stream_key']
-            buffer_stream_plan = self.build_buffer_stream_plan_from_required_services(
-                buffer_stream_key, required_services)
-
-            plan['execution_plan'] = buffer_stream_plan
-            plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
-            self.send_plan_to_scheduler(buffer_stream_plan)
-        else:
-            pass
-
-        return plan
-
-    def plan(self, change_request=None, plan=None):
-        if plan is None:
-            plan = {}
-            plan.update({
-                'type': 'correctSchedulerPlan',
-                'execution_plan': None,
-                'executor': 'sc-cmd',
-                'change_request': change_request
-            })
-            plan = self.parent_service.prepare_plan(plan)
-
-        if change_request is None:
-            change_request = plan['change_request']
-
-        cause = change_request['cause']
-        if plan['stage'] == self.parent_service.PLAN_STAGE_PREPARATION_START:
-            plan = self.plan_stage_preparation_start(cause, plan)
-
-        elif plan['stage'] == self.parent_service.PLAN_STAGE_WAITING_KNOWLEDGE_QUERIES:
-            plan = self.plan_stage_waiting_kowledge(cause, plan)
-        self.parent_service.update_plan_on_knoledge(plan)
-        return plan
-
-    def send_plan_to_scheduler(self, adaptive_plan):
-        new_event_data = {
-            'id': self.parent_service.service_based_random_event_id(),
-            'action': 'executeAdaptivePlan',
-        }
-        new_event_data.update(adaptive_plan)
-        self.parent_service.logger.debug(f'Sending event "{new_event_data}" to Scheduler')
-        self.parent_service.write_event_with_trace(new_event_data, self.scheduler_cmd_stream)
+    def create_buffer_stream_choices_plan(self, buffer_stream_entity):
+        buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
+        return [buffer_stream_plan]
 
 
 class MaxEnergyForQueueLimitSchedulerPlanner(object):
@@ -924,7 +832,6 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(object):
                 plan['stage'] = self.parent_service.PLAN_STAGE_IN_EXECUTION
                 self.parent_service.last_executed = plan
                 self.send_plan_to_scheduler(execution_plan)
-                # self.parent_service.logger.info(f'Current service workers info: {self.all_services_worker_pool}')
         else:
             pass
 
