@@ -255,11 +255,11 @@ class SimpleFixedSchedulerPlanner(BaseSchedulerPlanner):
 
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
 
-        return [None, buffer_stream_plan]
+        return buffer_stream_plan
 
     def create_buffer_stream_choices_plan(self, buffer_stream_entity):
         buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
-        return [buffer_stream_plan]
+        return [None, buffer_stream_plan]
 
 
 class MaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner):
@@ -318,6 +318,10 @@ class MaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner):
             )
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
         return buffer_stream_plan
+
+    def create_buffer_stream_choices_plan(self, buffer_stream_entity):
+        buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
+        return [None, buffer_stream_plan]
 
 
 class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner):
@@ -477,10 +481,17 @@ class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner)
 
 class RandomSchedulerPlanner(WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner):
 
+    def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key):
+        super(RandomSchedulerPlanner, self).__init__(
+            parent_service,
+            scheduler_cmd_stream_key,
+            ce_endpoint_stream_key
+        )
+        self.strategy_name = 'random'
+
     def create_scheduling_plan(self):
         scheduling_plan = super(RandomSchedulerPlanner, self).create_scheduling_plan()
-        strategy_name = 'random'
-        scheduling_plan['strategy']['name'] = strategy_name
+        scheduling_plan['strategy']['name'] = self.strategy_name
         return scheduling_plan
 
     def get_service_nonfloaded_workers(self, service, min_queue_space_percent):
