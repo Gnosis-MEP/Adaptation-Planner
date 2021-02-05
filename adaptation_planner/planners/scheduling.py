@@ -516,3 +516,14 @@ class RandomSchedulerPlanner(WeightedRandomMaxEnergyForQueueLimitSchedulerPlanne
             service_type, worker_key, _ = worker
             actual_worker_reference = self.all_services_worker_pool[service_type][worker_key]
             self.update_worker_planned_resource(actual_worker_reference, resource_usage)
+
+
+class RoundRobinSchedulerPlanner(RandomSchedulerPlanner):
+
+    def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key):
+        super(RoundRobinSchedulerPlanner, self).__init__(
+            parent_service,
+            scheduler_cmd_stream_key,
+            ce_endpoint_stream_key
+        )
+        self.strategy_name = 'round_robin'

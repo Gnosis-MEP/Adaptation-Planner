@@ -8,7 +8,8 @@ from adaptation_planner.planners.scheduling import (
     SimpleFixedSchedulerPlanner,
     MaxEnergyForQueueLimitSchedulerPlanner,
     WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner,
-    RandomSchedulerPlanner
+    RandomSchedulerPlanner,
+    RoundRobinSchedulerPlanner
 )
 
 from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
@@ -64,6 +65,10 @@ class AdaptationPlanner(BaseTracerService):
             'random': RandomSchedulerPlanner(
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
             ),
+            'round_robin': RoundRobinSchedulerPlanner(
+                self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
+            ),
+
         }
 
         self.scheduler_planner = self.available_scheduler_planners[self.scheduler_planner_type]
