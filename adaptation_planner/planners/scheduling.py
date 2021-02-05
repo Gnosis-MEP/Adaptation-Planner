@@ -259,7 +259,8 @@ class SimpleFixedSchedulerPlanner(BaseSchedulerPlanner):
 
     def create_buffer_stream_choices_plan(self, buffer_stream_entity):
         buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
-        return [None, buffer_stream_plan]
+        plan_cum_weight = None
+        return [(plan_cum_weight, buffer_stream_plan)]
 
 
 class MaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner):
@@ -321,7 +322,8 @@ class MaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner):
 
     def create_buffer_stream_choices_plan(self, buffer_stream_entity):
         buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
-        return [None, buffer_stream_plan]
+        plan_cum_weight = None
+        return [(plan_cum_weight, buffer_stream_plan)]
 
 
 class WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(BaseSchedulerPlanner):
