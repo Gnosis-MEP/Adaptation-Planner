@@ -67,7 +67,7 @@ class AdaptationPlanner(BaseTracerService):
             ),
             'round_robin': RoundRobinSchedulerPlanner(
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-            ),
+            )
 
         }
 
@@ -155,6 +155,7 @@ class AdaptationPlanner(BaseTracerService):
         # self._log_dict('Plans being Planned:', self.plans_being_planned)
         self._log_dict('Last plan executed:', self.last_executed)
         self.logger.info(f'Last execution_plan: {self.last_executed.get("execution_plan", {})}')
+        self._log_dict('All queries', self.scheduler_planner.all_queries)
 
     def run(self):
         super(AdaptationPlanner, self).run()
