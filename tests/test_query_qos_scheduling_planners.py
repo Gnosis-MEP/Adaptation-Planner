@@ -113,3 +113,33 @@ class TestSingleBestForQoSSinglePolicySchedulerPlanner(TestCase):
         ret = self.planner.workers_key_sorted_by_qos(
             worker_pool, qos_policy_name=qos_policy_name, qos_policy_value=qos_policy_value)
         self.assertListEqual(ret, ['object-detection-ssd-data', 'object-detection-ssd-gpu-data'])
+
+    def test_create_buffer_stream_plan_accuracy_max(self):
+        self.all_queries_dict['3940d2cad2926150093a9a786163ee14']['qos_policies'] = {
+            'accuracy': 'max'
+        }
+        bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
+        expected_bf_plan = [['object-detection-ssd-gpu-data'], ['wm-cmd']]
+        self.assertListEqual(ret, expected_bf_plan)
+
+    def test_create_buffer_stream_plan_latency_min(self):
+        self.all_queries_dict['3940d2cad2926150093a9a786163ee14']['qos_policies'] = {
+            'latency': 'min'
+        }
+        bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
+        expected_bf_plan = [['object-detection-ssd-gpu-data'], ['wm-cmd']]
+        self.assertListEqual(ret, expected_bf_plan)
+
+    def test_create_buffer_stream_plan_energy_min(self):
+        self.all_queries_dict['3940d2cad2926150093a9a786163ee14']['qos_policies'] = {
+            'energy_consumption': 'min'
+        }
+        bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
+        expected_bf_plan = [['object-detection-ssd-data'], ['wm-cmd']]
+        self.assertListEqual(ret, expected_bf_plan)

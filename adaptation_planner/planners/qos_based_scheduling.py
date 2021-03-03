@@ -74,12 +74,16 @@ class SingleBestForQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
 
     def create_buffer_stream_plan(self, buffer_stream_entity):
         required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
+        first_query = list(buffer_stream_entity['queries'].values())[0]
+        qos_policy_name, qos_policy_value = list(first_query['qos_policies'].items())[0]
 
         buffer_stream_plan = []
         for service in required_services:
             worker_pool = self.all_services_worker_pool[service]
             selected_worker_pool = worker_pool
-            qos_sorted_workers_keys = self.workers_key_sorted_by_qos(selected_worker_pool)
+            qos_sorted_workers_keys = self.workers_key_sorted_by_qos(
+                selected_worker_pool, qos_policy_name, qos_policy_value)
+
             best_worker_key = qos_sorted_workers_keys[0]
             buffer_stream_plan.append([best_worker_key])
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
