@@ -108,13 +108,6 @@ class SingleBestForQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
             selected_worker_pool = worker_pool
         return selected_worker_pool
 
-    # def get_dataflow_bottleneck(self, required_services, workers_keys, required_events):
-    #     prev_min = None
-    #     for dataflow_index, service in enumerate(required_services):
-    #         worker_key = workers_keys[dataflow_index]
-    #         worker = self.all_services_worker_pool[service][worker_key]
-    #         prev_min = worker
-
     def update_workers_planned_resources(self, required_services, buffer_stream_plan, required_events):
         for dataflow_index, service in enumerate(required_services):
             worker_key = buffer_stream_plan[dataflow_index][0]
