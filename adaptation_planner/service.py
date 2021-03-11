@@ -12,6 +12,10 @@ from adaptation_planner.planners.scheduling import (
     RoundRobinSchedulerPlanner
 )
 
+from adaptation_planner.planners.qos_based_scheduling import (
+    SingleBestForQoSSinglePolicySchedulerPlanner
+)
+
 from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
 
 
@@ -67,7 +71,10 @@ class AdaptationPlanner(BaseTracerService):
             ),
             'round_robin': RoundRobinSchedulerPlanner(
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-            )
+            ),
+            'qos_single_best': SingleBestForQoSSinglePolicySchedulerPlanner(
+                self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
+            ),
 
         }
 
