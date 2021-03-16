@@ -634,3 +634,80 @@ class TestWeightedRandomQoSSinglePolicySchedulerPlanner(TestCase):
         ]
         self.assertEqual(len(ret), 8)
         self.assertListEqual(ret, expected)
+
+    def test_update_workers_planned_resources(self):
+        self.all_services_worker_pool = {}
+        self.all_services_worker_pool['ObjectDetection'] = {
+            'object-detection-data': {
+                'resources': {
+                    'planned': {
+                        'events_capacity': 100,
+                    }
+                }
+            },
+            'object-detection-data2': {
+                'resources': {
+                    'planned': {
+                        'events_capacity': 200,
+                    }
+                }
+            }
+        }
+        self.all_services_worker_pool['ColorDetection'] = {
+            'color-detection-data': {
+                'resources': {
+                    'planned': {
+                        'events_capacity': 300,
+                    }
+                }
+            }
+        }
+
+        dataflow_choices_with_cum_weights = [
+            (25.0,
+             ([25, 'ObjectDetection', 'object-detection-data'],
+              [85, 'ColorDetection', 'color-detection-data'])),
+            (100.0,
+             ([75, 'ObjectDetection', 'object-detection-data2'],
+              [85, 'ColorDetection', 'color-detection-data'],)),
+        ]
+        dataflow_choices_weights = [25, 75]
+        planned_event_count = 100
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+
+        self.planner.update_workers_planned_resources(
+            dataflow_choices_with_cum_weights, dataflow_choices_weights, planned_event_count
+        )
+
+        expected_obj1_detection_events_cap = 75
+        expected_obj2_detection_events_cap = 125
+        expected_color_detection_events_cap = 200
+        obj1_detection_worker = self.planner.all_services_worker_pool['ObjectDetection']['object-detection-data']
+        obj2_detection_worker = self.planner.all_services_worker_pool['ObjectDetection']['object-detection-data2']
+        color_detection_worker = self.planner.all_services_worker_pool['ColorDetection']['color-detection-data']
+
+        self.assertAlmostEqual(
+            obj1_detection_worker['resources']['planned']['events_capacity'],
+            expected_obj1_detection_events_cap
+        )
+        self.assertAlmostEqual(
+            obj2_detection_worker['resources']['planned']['events_capacity'],
+            expected_obj2_detection_events_cap
+        )
+
+        self.assertAlmostEqual(
+            color_detection_worker['resources']['planned']['events_capacity'],
+            expected_color_detection_events_cap
+        )
+
+    def test_create_filtered_and_weighted_workers_pool(self):
+        pass
+
+    def test_format_dataflow_choices_to_buffer_stream_choices_plan(self):
+        pass
+
+    def test_create_buffer_stream_choices_plan(self):
+        pass
+
+
+

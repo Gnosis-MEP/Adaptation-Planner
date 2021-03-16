@@ -184,6 +184,19 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
         )
         self.strategy_name = 'qos_weighted_random'
 
+    def create_filtered_and_weighted_workers_pool(
+            self, required_services, planned_event_count, qos_policy_name, qos_policy_value):
+        per_service_worker_keys_with_weights = {}
+        for service in required_services:
+            worker_pool = self.all_services_worker_pool[service]
+            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(worker_pool)
+            for worker_key, worker in selected_worker_pool.items():
+                worker_weight = self.get_worker_choice_weight_for_qos_policy(
+                    worker, planned_event_count, qos_policy_name, qos_policy_value
+                )
+                per_service_worker_keys_with_weights[service] = (worker_weight, service, worker_key)
+        return per_service_worker_keys_with_weights
+
     def get_worker_congestion_impact_rate(self, worker, planned_event_count):
         # get_bufferstream_planned_event_count
         worker_events_capacity = self.get_worker_events_capacity(worker)
@@ -258,47 +271,49 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
 
         return dataflow_choices_with_cum_weights, dataflow_choices_weights
 
-    # def update_workers_planned_resources(
-    #         self, dataflow_choice_weighted, dataflow_weight, total_cum_weight, min_queue_space_percent):
-    #     # Change of getting this dataflow
-    #     resource_usage_rating = (dataflow_weight / total_cum_weight)
+    def update_workers_planned_resources(
+            self, dataflow_choices_with_cum_weights, dataflow_choices_weights, planned_event_count):
 
-    #     # change of getting best dataflow times the expected usage before a new plan would be required
-    #     resource_usage = resource_usage_rating * min_queue_space_percent
-    #     cum_weight, dataflow = dataflow_choice_weighted
-    #     for worker in dataflow:
-    #         service_type, worker_key, _ = worker
-    #         actual_worker_reference = self.all_services_worker_pool[service_type][worker_key]
-    #         self.update_worker_planned_resource(actual_worker_reference, resource_usage)
+        total_cum_weight = dataflow_choices_with_cum_weights[-1][0]
+        for dataflow_index, dataflow_choice in enumerate(dataflow_choices_with_cum_weights):
+            service_worker_key_tuples = dataflow_choice[1]
 
-    def create_buffer_stream_plan(self, buffer_stream_entity):
+            relative_weight = dataflow_choices_weights[dataflow_index]
+            probability = relative_weight / total_cum_weight
+            proportional_used_resources = planned_event_count * probability
+            for _, service_key, worker_key in service_worker_key_tuples:
+                worker = self.all_services_worker_pool[service_key][worker_key]
+                events_capacity = self.get_worker_events_capacity(worker)
+                updated_events_capacity = events_capacity - proportional_used_resources
+                worker['resources']['planned'][self.events_capacity_key] = updated_events_capacity
+                self.all_services_worker_pool[service_key][worker_key] = worker
+
+    def format_dataflow_choices_to_buffer_stream_choices_plan(self, dataflow_choices):
+        buffer_stream_choices_plan = []
+        for dataflow_choice in dataflow_choices:
+            plan_cum_weight = dataflow_choice[0]
+            service_worker_key_tuples = dataflow_choice[1]
+            dataflow = [[df[-1]] for df in service_worker_key_tuples]
+            dataflow.append([self.ce_endpoint_stream_key])
+            buffer_stream_choice = (plan_cum_weight, dataflow)
+            buffer_stream_choices_plan.append(buffer_stream_choice)
+        return buffer_stream_choices_plan
+
+    def create_buffer_stream_choices_plan(self, buffer_stream_entity):
         required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
         first_query = list(buffer_stream_entity['queries'].values())[0]
         qos_policy_name, qos_policy_value = list(first_query['qos_policies'].items())[0]
 
-        buffer_stream_plan = []
-        for service in required_services:
-            worker_pool = self.all_services_worker_pool[service]
-            selected_worker_pool = self.filter_available_service_worker_pool(worker_pool)
-            if len(selected_worker_pool) == 0:
-                selected_worker_pool = worker_pool
-
-            qos_sorted_workers_keys = self.workers_key_sorted_by_qos(
-                selected_worker_pool, qos_policy_name, qos_policy_value)
-
-            best_worker_key = qos_sorted_workers_keys[0]
-            buffer_stream_plan.append([best_worker_key])
-
-            self.update_worker_planned_resource(
-                worker_pool[best_worker_key], min_queue_space_percent
-            )
-
-        buffer_stream_plan.append([self.ce_endpoint_stream_key])
-        return buffer_stream_plan
-
-    def create_buffer_stream_choices_plan(self, buffer_stream_entity):
-        buffer_stream_plan = self.create_buffer_stream_plan(buffer_stream_entity)
-        plan_cum_weight = None
-        return [(plan_cum_weight, buffer_stream_plan)]
-
-
+        planned_event_count = self.get_bufferstream_planned_event_count(buffer_stream_entity)
+        per_service_worker_keys_with_weights = self.create_filtered_and_weighted_workers_pool(
+            required_services, planned_event_count, qos_policy_name, qos_policy_value
+        )
+        dataflow_choices, weights = self.create_dataflow_choices_with_cum_weights_and_relative_weights(
+            per_service_worker_keys_with_weights
+        )
+        self.update_workers_planned_resources(
+            dataflow_choices, weights, planned_event_count)
+        buffer_stream_choices_plan = self.format_dataflow_choices_to_buffer_stream_choices_plan(
+            dataflow_choices
+        )
+        return buffer_stream_choices_plan
