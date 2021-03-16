@@ -18,6 +18,7 @@ walrus = "==0.7.1"
 python-decouple = "==3.1"
 event-service-utils = "*"
 adaptation_planner = {path = ".",editable = true}
+numpy = "*"
 
 [requires]
 python_version = "3.6"

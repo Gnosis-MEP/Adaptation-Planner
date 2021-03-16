@@ -2,6 +2,8 @@ import functools
 import itertools
 import math
 
+import numpy as np
+
 from ..conf import QUERY_SERVICE_CHAIN_FIELD
 from .scheduling import BaseSchedulerPlanner
 
@@ -9,22 +11,49 @@ from .scheduling import BaseSchedulerPlanner
 class BaseQoSSchedulerPlanner(BaseSchedulerPlanner):
     """Base class for scheduler planning"""
 
-    def workers_key_sorted_by_qos(self, worker_pool, qos_policy_name, qos_policy_value):
-        reverse = True if qos_policy_value == 'max' else False
-
-        metric_name = qos_policy_name
-        # latency actually will check for the oposity of throughput:
-        # min latency == max worker throughput
-        if qos_policy_name == 'latency':
-            metric_name = 'throughput'
-            reverse = False if reverse else True
-
-        sorted_workers = sorted(
-            worker_pool.keys(), key=lambda w_key: float(worker_pool[w_key]['monitoring'][metric_name]),
-            reverse=reverse
+    def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key):
+        super(BaseQoSSchedulerPlanner, self).__init__(
+            parent_service,
+            scheduler_cmd_stream_key,
+            ce_endpoint_stream_key
         )
+        self.adaptation_delta = 10
+        self.events_capacity_key = 'events_capacity'
 
-        return sorted_workers
+    def get_bufferstream_planned_event_count(self, buffer_stream_entity):
+        fps = float(buffer_stream_entity['fps'])
+        num_events = self.adaptation_delta * fps
+        return math.ceil(num_events)
+
+    def calculate_worker_queue_space_percentage(self, worker):
+        return worker['resources']['planned']['queue_space'] / worker['monitoring']['queue_limit']
+
+    def initialize_planned_worker_event_capacity(self, worker):
+        if self.events_capacity_key not in worker['resources']['planned']:
+            queue_size = int(worker['monitoring']['queue_size'])
+            throughput = float(worker['monitoring']['throughput'])
+            max_events_capacity = self.adaptation_delta * throughput
+            events_capacity = max_events_capacity - queue_size
+            worker['resources']['planned'][self.events_capacity_key] = events_capacity
+
+    def initialize_service_workers_planned_capacity(self, worker_pool):
+        for worker_key, worker in worker_pool.items():
+            self.initialize_planned_worker_event_capacity(worker)
+        return worker_pool
+
+    def get_worker_events_capacity(self, worker):
+        return worker['resources']['planned'].get(self.events_capacity_key, 0)
+
+    def is_worker_overloaded(self, worker):
+        return self.get_worker_events_capacity(worker) <= 0
+
+    def filter_overloaded_service_worker_pool_or_all_if_empty(self, worker_pool):
+        selected_worker_pool = dict(filter(
+            lambda kv: not self.is_worker_overloaded(kv[1]), worker_pool.items()
+        ))
+        if len(selected_worker_pool) == 0:
+            selected_worker_pool = worker_pool
+        return selected_worker_pool
 
     def prepare_local_queries_entities(self, knowledge_queries):
         # get the query about the subscriber_query
@@ -73,40 +102,23 @@ class SingleBestForQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
             ce_endpoint_stream_key
         )
         self.strategy_name = 'single_best'
-        self.adaptation_delta = 10
-        self.events_capacity_key = 'events_capacity'
 
-    def get_bufferstream_planned_event_count(self, buffer_stream_entity):
-        fps = float(buffer_stream_entity['fps'])
-        num_events = self.adaptation_delta * fps
-        return math.ceil(num_events)
+    def workers_key_sorted_by_qos(self, worker_pool, qos_policy_name, qos_policy_value):
+        reverse = True if qos_policy_value == 'max' else False
 
-    def calculate_worker_queue_space_percentage(self, worker):
-        return worker['resources']['planned']['queue_space'] / worker['monitoring']['queue_limit']
+        metric_name = qos_policy_name
+        # latency actually will check for the oposity of throughput:
+        # min latency == max worker throughput
+        if qos_policy_name == 'latency':
+            metric_name = 'throughput'
+            reverse = False if reverse else True
 
-    def initialize_planned_worker_event_capacity(self, worker):
-        if self.events_capacity_key not in worker['resources']['planned']:
-            queue_size = int(worker['monitoring']['queue_size'])
-            throughput = float(worker['monitoring']['throughput'])
-            max_events_capacity = self.adaptation_delta * throughput
-            events_capacity = max_events_capacity - queue_size
-            worker['resources']['planned'][self.events_capacity_key] = events_capacity
+        sorted_workers = sorted(
+            worker_pool.keys(), key=lambda w_key: float(worker_pool[w_key]['monitoring'][metric_name]),
+            reverse=reverse
+        )
 
-    def initialize_service_workers_planned_capacity(self, worker_pool):
-        for worker_key, worker in worker_pool.items():
-            self.initialize_planned_worker_event_capacity(worker)
-        return worker_pool
-
-    def is_worker_overloaded(self, worker):
-        return worker['resources']['planned'].get(self.events_capacity_key, 0) <= 0
-
-    def filter_overloaded_service_worker_pool_or_all_if_empty(self, worker_pool):
-        selected_worker_pool = dict(filter(
-            lambda kv: not self.is_worker_overloaded(kv[1]), worker_pool.items()
-        ))
-        if len(selected_worker_pool) == 0:
-            selected_worker_pool = worker_pool
-        return selected_worker_pool
+        return sorted_workers
 
     def update_workers_planned_resources(self, required_services, buffer_stream_plan, required_events):
         for dataflow_index, service in enumerate(required_services):
@@ -165,72 +177,86 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
     """
 
     def __init__(self, parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key):
-        super(SingleBestForQoSSinglePolicySchedulerPlanner, self).__init__(
+        super(WeightedRandomQoSSinglePolicySchedulerPlanner, self).__init__(
             parent_service,
             scheduler_cmd_stream_key,
             ce_endpoint_stream_key
         )
-        self.strategy_name = 'weighted_random'
+        self.strategy_name = 'qos_weighted_random'
 
-    def filter_available_service_worker_pool(self, worker_pool):
-        # dict(filter(
-        #     lambda x: self.calculate_worker_queue_space_percentage(x[1]) >= min_queue_space_percent, worker_pool.items()
-        # ))
-        return worker_pool
+    def get_worker_congestion_impact_rate(self, worker, planned_event_count):
+        # get_bufferstream_planned_event_count
+        worker_events_capacity = self.get_worker_events_capacity(worker)
+        # if already overloaded, then make it so that the events capacity
+        # affects very strongly the final weigth
+        if worker_events_capacity < 0:
+            worker_events_capacity = 1 / (worker_events_capacity * -1)
+        else:
+            worker_events_capacity += 1
+        # congestion impact rate based on the planned events counts
+        # the plus one is in case the capacity is at 0, we don't want the rate to be 0
+        congestion_impact_rate = (worker_events_capacity) / planned_event_count
+        # we don't care if the worker is more than capable of handling the ammount
+        # of workload, only care when it cannot handle, since this would cause congestion
+        if congestion_impact_rate > 1:
+            congestion_impact_rate = 1
+        return congestion_impact_rate
 
-    def get_worker_choice_weight(self, worker):
-        energy_consumption = worker['resources']['usage']['energy_consumption']
-        queue_space_percentage = self.calculate_worker_queue_space_percentage(worker)
-        # rating = space_perc * (1 / energy)
-        # the lower the energy consumption the higher the rating
-        # the higher the space, the higher the rating
-        if queue_space_percentage < 0:
-            queue_space_percentage = 0.001
-        rating = queue_space_percentage / (energy_consumption**2)
-        return rating
+    def get_worker_choice_weight_for_qos_policy(self, worker, planned_event_count, qos_policy_name, qos_policy_value):
+        inverse = True if qos_policy_value == 'min' else False
+
+        if qos_policy_name == 'latency':
+            qos_policy_name = 'throughput'
+            inverse = False if inverse else True
+
+        weight = float(worker['monitoring'][qos_policy_name])
+        if inverse:
+            weight = 1 / weight
+
+        congestion_impact_rate = self.get_worker_congestion_impact_rate(worker, planned_event_count)
+        weight_with_congestion = weight * congestion_impact_rate
+        return weight_with_congestion
 
     def get_dataflow_choice_min_weight(self, dataflow_choice):
         if len(dataflow_choice) == 1:
-            dataflow_weight = dataflow_choice[0][-1]
+            dataflow_weight = dataflow_choice[0][0]
         else:
             dataflow_weight = functools.reduce(
                 lambda w_tuple_a, w_tuple_b:
-                    min(w_tuple_a[-1], w_tuple_b[-1]),
+                    [min(w_tuple_a[0], w_tuple_b[0])],
                 dataflow_choice
-            )
+            )[0]
         return dataflow_weight
 
-    def calculate_cumsum_for_dataflow_choice(
-            self, dataflow_index, dataflow_choice, prev_cum_weight, best_weight_and_index):
-        # dataflow weight is the min weight of the whole dataflow workers
-        # (if one step is bad it will tend to reduce the whole dataflow to that level)
-        dataflow_weight = self.get_dataflow_choice_min_weight(dataflow_choice)
-        dataflow_cum_weight = prev_cum_weight + dataflow_weight
-        if best_weight_and_index is None:
-            best_weight_and_index = (dataflow_weight, dataflow_index)
-        else:
-            if dataflow_weight >= best_weight_and_index[0]:
-                best_weight_and_index = (dataflow_weight, dataflow_index)
-        prev_cum_weight = dataflow_cum_weight
+    def create_cartesian_product_dataflow_choices(self, per_service_worker_keys_with_weights):
+        cartesian_product_dataflows_choices = list(itertools.product(*per_service_worker_keys_with_weights.values()))
+        return cartesian_product_dataflows_choices
 
-        dataflow_weighted_choice = [dataflow_cum_weight, dataflow_choice]
+    def create_dataflow_choices_weights(self, cartesian_product_dataflows_choices):
+        dataflow_choices_weights = [
+            self.get_dataflow_choice_min_weight(dataflow_choice)
+            for dataflow_choice in cartesian_product_dataflows_choices
+        ]
+        return dataflow_choices_weights
 
-        return best_weight_and_index, prev_cum_weight, dataflow_weighted_choice
+    def create_dataflow_choices_with_cum_weights(self, cartesian_product_dataflows_choices, dataflow_choices_weights):
+        cum_sum_weights = np.cumsum(dataflow_choices_weights, dtype=float)
 
-    def create_dataflow_choices_with_cum_weights_and_best_dataflow(self, per_service_workers_with_weights):
-        cartesian_product_dataflows_choices = itertools.product(*per_service_workers_with_weights.values())
+        dataflow_choices_with_cum_weights = zip(cum_sum_weights, cartesian_product_dataflows_choices)
 
-        dataflow_choices_with_cum_weights = []
-        best_weight_and_index = None
-        prev_cum_weight = 0
-        for i, dataflow_choice in enumerate(cartesian_product_dataflows_choices):
-            ret_tuple = self.calculate_cumsum_for_dataflow_choice(
-                i, dataflow_choice, prev_cum_weight, best_weight_and_index
-            )
-            best_weight_and_index, prev_cum_weight, dataflow_weighted_choice = ret_tuple
-            dataflow_choices_with_cum_weights.append(dataflow_weighted_choice)
+        return list(dataflow_choices_with_cum_weights)
 
-        return best_weight_and_index, dataflow_choices_with_cum_weights
+    def create_dataflow_choices_with_cum_weights_and_relative_weights(self, per_service_worker_keys_with_weights):
+        cartesian_product_dataflows_choices = self.create_cartesian_product_dataflow_choices(
+            per_service_worker_keys_with_weights
+        )
+        dataflow_choices_weights = self.create_dataflow_choices_weights(cartesian_product_dataflows_choices)
+
+        dataflow_choices_with_cum_weights = self.create_dataflow_choices_with_cum_weights(
+            cartesian_product_dataflows_choices, dataflow_choices_weights
+        )
+
+        return dataflow_choices_with_cum_weights, dataflow_choices_weights
 
     # def update_workers_planned_resources(
     #         self, dataflow_choice_weighted, dataflow_weight, total_cum_weight, min_queue_space_percent):

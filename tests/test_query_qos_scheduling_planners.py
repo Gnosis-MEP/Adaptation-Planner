@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 
 from adaptation_planner.planners.qos_based_scheduling import (
     SingleBestForQoSSinglePolicySchedulerPlanner,
+    WeightedRandomQoSSinglePolicySchedulerPlanner
 )
 
 
@@ -244,3 +245,392 @@ class TestSingleBestForQoSSinglePolicySchedulerPlanner(TestCase):
         self.assertIn('object-detection-ssd-data', worker_pool.keys())
         self.assertIn('object-detection-ssd-gpu-data', worker_pool.keys())
 
+
+
+class TestWeightedRandomQoSSinglePolicySchedulerPlanner(TestCase):
+
+    def setUp(self):
+        scheduler_cmd_stream_key = 'sc-cmd'
+        ce_endpoint_stream_key = 'wm-cmd'
+        parent_service = MagicMock()
+        self.planner = WeightedRandomQoSSinglePolicySchedulerPlanner(
+            parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key)
+        self.all_queries_dict = {
+            '3940d2cad2926150093a9a786163ee14': {
+                'action': 'updateControlFlow',
+                'data_flow': ['ObjectDetection', 'ColorDetection'],
+                'publisher_id': 'publisher1',
+                'qos_policies': {
+                    'accuracy': 'min'
+                },
+                'query_id': '3940d2cad2926150093a9a786163ee14',
+                'type': 'http://gnosis-mep.org/subscriber_query'
+            }
+        }
+        self.all_buffer_streams = {
+            'b41eeb0408847b28474f362f5642635e': {
+                'action': 'startPreprocessing',
+                'buffer_stream_key': 'b41eeb0408847b28474f362f5642635e',
+                'fps': '30',
+                'publisher_id': 'publisher1',
+                'queries': self.all_queries_dict,
+                'resolution': '640x480',
+                'source': 'rtmp://172.17.0.1/vod2/cars.mp4',
+                'type': 'http://gnosis-mep.org/buffer_stream'
+            }
+        }
+
+        self.worker_s1a = {
+            'monitoring': {
+                'accuracy': '0.6',
+                'energy_consumption': '100.0',
+                'queue_size': 2,
+                'queue_limit': 100,
+                'queue_space': 100,
+                'queue_space_percent': 1.0,
+                'service_type': 'ObjectDetection',
+                'stream_key': 'object-detection-ssd-data',
+                'throughput': '15',
+                'type': 'http://gnosis-mep.org/service_worker'
+            },
+            'resources': {
+                'planned': {
+                }
+            }
+        }
+        self.worker_s1b = {
+            'monitoring': {
+                'accuracy': '0.9',
+                'energy_consumption': '150.0',
+                'queue_size': 5,
+                'queue_limit': 100,
+                'queue_space': 100,
+                'queue_space_percent': 1.0,
+                'service_type': 'ObjectDetection',
+                'stream_key': 'object-detection-ssd-gpu-data',
+                'throughput': '30',
+                'type': 'http://gnosis-mep.org/service_worker'
+            },
+            'resources': {
+                'planned': {
+                }
+            }
+        }
+        self.worker_s2a = {
+            'monitoring': {
+                'accuracy': '0.8',
+                'energy_consumption': '50.0',
+                'queue_size': 10,
+                'service_type': 'ColorDetection',
+                'stream_key': 'color-detection-data',
+                'throughput': '15',
+                'type': 'http://gnosis-mep.org/service_worker'
+            },
+            'resources': {
+                'planned': {
+                },
+            }
+        }
+
+        self.worker_s2b = {
+            'monitoring': {
+                'accuracy': '0.7',
+                'energy_consumption': '30.0',
+                'queue_size': 10,
+                'service_type': 'ColorDetection',
+                'stream_key': 'color-detection2-data',
+                'throughput': '60',
+                'type': 'http://gnosis-mep.org/service_worker'
+            },
+            'resources': {
+                'planned': {
+                },
+            }
+        }
+
+        self.all_services_worker_pool = {
+            'ObjectDetection': {
+                'object-detection-ssd-data': self.worker_s1a,
+                'object-detection-ssd-gpu-data': self.worker_s1b,
+            },
+            'ColorDetection': {
+                'color-detection-data': self.worker_s2a,
+                'color-detection2-data': self.worker_s2b,
+            }
+        }
+
+    def test_get_worker_congestion_impact_rate_when_events_cap_greater_than_0(self):
+        self.worker_s1a['resources']['planned']['events_capacity'] = 2
+        planned_event_count = 10
+        ret = self.planner.get_worker_congestion_impact_rate(self.worker_s1a, planned_event_count)
+        self.assertAlmostEqual(ret, 0.3)
+
+    def test_get_worker_congestion_impact_rate_when_events_cap_is_0(self):
+        self.worker_s1a['resources']['planned']['events_capacity'] = 0
+        planned_event_count = 10
+        ret = self.planner.get_worker_congestion_impact_rate(self.worker_s1a, planned_event_count)
+        self.assertAlmostEqual(ret, 0.1)
+
+    def test_get_worker_congestion_impact_rate_when_events_cap_is_negative(self):
+        self.worker_s1a['resources']['planned']['events_capacity'] = -2
+        planned_event_count = 10
+        ret = self.planner.get_worker_congestion_impact_rate(self.worker_s1a, planned_event_count)
+        self.assertAlmostEqual(ret, 0.05)
+
+    def test_get_worker_congestion_impact_rate_shouldnt_be_more_than_one(self):
+        self.worker_s1a['resources']['planned']['events_capacity'] = 20
+        planned_event_count = 10
+        ret = self.planner.get_worker_congestion_impact_rate(self.worker_s1a, planned_event_count)
+        self.assertEqual(ret, 1)
+
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_worker_congestion_impact_rate')
+    def test_get_worker_choice_weight_for_qos_policy_accuracy_max_when_no_congestion(self, get_con_rate):
+        qos_policy_name = 'accuracy'
+        qos_policy_value = 'max'
+        planned_event_count = 10
+        get_con_rate.return_value = 1
+        self.worker_s1a['monitoring'][qos_policy_name] = 0.9
+
+        ret = self.planner.get_worker_choice_weight_for_qos_policy(
+            self.worker_s1a, planned_event_count, qos_policy_name, qos_policy_value)
+        self.assertAlmostEqual(ret, 0.9)
+
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_worker_congestion_impact_rate')
+    def test_get_worker_choice_weight_for_qos_policy_accuracy_max_with_congestion(self, get_con_rate):
+        qos_policy_name = 'accuracy'
+        qos_policy_value = 'max'
+        planned_event_count = 10
+        get_con_rate.return_value = 0.25
+        self.worker_s1a['monitoring'][qos_policy_name] = 0.9
+
+        ret = self.planner.get_worker_choice_weight_for_qos_policy(
+            self.worker_s1a, planned_event_count, qos_policy_name, qos_policy_value)
+        self.assertAlmostEqual(ret, 0.225)
+
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_worker_congestion_impact_rate')
+    def test_get_worker_choice_weight_for_qos_policy_energy_min_with_congestion(self, get_con_rate):
+        qos_policy_name = 'energy_consumption'
+        qos_policy_value = 'min'
+        planned_event_count = 10
+        get_con_rate.return_value = 0.5
+        self.worker_s1a['monitoring'][qos_policy_name] = 10
+
+        ret = self.planner.get_worker_choice_weight_for_qos_policy(
+            self.worker_s1a, planned_event_count, qos_policy_name, qos_policy_value)
+        self.assertAlmostEqual(ret, 0.05)
+
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_worker_congestion_impact_rate')
+    def test_get_worker_choice_weight_for_qos_policy_energy_min_with_congestion_even_worst_energy(self, get_con_rate):
+        qos_policy_name = 'energy_consumption'
+        qos_policy_value = 'min'
+        planned_event_count = 10
+        get_con_rate.return_value = 0.5
+        self.worker_s1a['monitoring'][qos_policy_name] = 20
+
+        ret = self.planner.get_worker_choice_weight_for_qos_policy(
+            self.worker_s1a, planned_event_count, qos_policy_name, qos_policy_value)
+        self.assertAlmostEqual(ret, 0.025)
+
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_worker_congestion_impact_rate')
+    def test_get_worker_choice_weight_for_qos_policy_latency_min_with_congestion(self, get_con_rate):
+        qos_policy_name = 'latency'
+        qos_policy_value = 'min'
+        planned_event_count = 10
+        get_con_rate.return_value = 0.5
+        self.worker_s1a['monitoring']['throughput'] = 10
+
+        ret = self.planner.get_worker_choice_weight_for_qos_policy(
+            self.worker_s1a, planned_event_count, qos_policy_name, qos_policy_value)
+        self.assertAlmostEqual(ret, 5.0)
+
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_worker_congestion_impact_rate')
+    def test_get_worker_choice_weight_for_qos_policy_latency_min_with_congestion_even_better_throughput(self, get_con_rate):
+        qos_policy_name = 'latency'
+        qos_policy_value = 'min'
+        planned_event_count = 10
+        get_con_rate.return_value = 0.5
+        self.worker_s1a['monitoring']['throughput'] = 15
+
+        ret = self.planner.get_worker_choice_weight_for_qos_policy(
+            self.worker_s1a, planned_event_count, qos_policy_name, qos_policy_value)
+        self.assertAlmostEqual(ret, 7.5)
+
+    def test_get_dataflow_choice_min_weight(self):
+        service_worker_w_tuple1 = [10, 'ObjectDetection', 'object-detection-data']
+        service_worker_w_tuple2 = [5, 'ColorDetection', 'color-detection-data2']
+        service_worker_w_tuple3 = [15, 'RainDetection', 'rain-detection-data3']
+        dataflow_choice = [service_worker_w_tuple1, service_worker_w_tuple2, service_worker_w_tuple3]
+        ret = self.planner.get_dataflow_choice_min_weight(dataflow_choice)
+
+        self.assertEqual(ret, 5)
+
+    def test_create_dataflow_choices_with_cum_weights_and_relative_weights(self):
+        service_worker_w_tuple_a1 = [10, 'ObjectDetection', 'object-detection-data']
+        service_worker_w_tuple_a2 = [5, 'ColorDetection', 'color-detection-data']
+        service_worker_w_tuple_a3 = [15, 'RainDetection', 'rain-detection-data']
+
+        service_worker_w_tuple_b1 = [9, 'ObjectDetection', 'object-detection-data2']
+        service_worker_w_tuple_b2 = [8, 'ColorDetection', 'color-detection-data2']
+        service_worker_w_tuple_b3 = [13, 'RainDetection', 'rain-detection-data2']
+
+        per_service_worker_keys_with_weights = {
+            'ObjectDetection': [service_worker_w_tuple_a1, service_worker_w_tuple_b1],
+            'ColorDetection': [service_worker_w_tuple_a2, service_worker_w_tuple_b2],
+            'RainDetection': [service_worker_w_tuple_a3, service_worker_w_tuple_b3],
+
+        }
+        ret = self.planner.create_dataflow_choices_with_cum_weights_and_relative_weights(
+            per_service_worker_keys_with_weights
+        )
+        dataflow_choices = ret[0]
+        dataflow_relative_weights = ret[1]
+        expected_ret = [(5.0,
+                         ([10, 'ObjectDetection', 'object-detection-data'],
+                          [5, 'ColorDetection', 'color-detection-data'],
+                             [15, 'RainDetection', 'rain-detection-data'])),
+                        (10.0,
+                         ([10, 'ObjectDetection', 'object-detection-data'],
+                          [5, 'ColorDetection', 'color-detection-data'],
+                             [13, 'RainDetection', 'rain-detection-data2'])),
+                        (18.0,
+                         ([10, 'ObjectDetection', 'object-detection-data'],
+                          [8, 'ColorDetection', 'color-detection-data2'],
+                             [15, 'RainDetection', 'rain-detection-data'])),
+                        (26.0,
+                         ([10, 'ObjectDetection', 'object-detection-data'],
+                          [8, 'ColorDetection', 'color-detection-data2'],
+                             [13, 'RainDetection', 'rain-detection-data2'])),
+                        (31.0,
+                         ([9, 'ObjectDetection', 'object-detection-data2'],
+                          [5, 'ColorDetection', 'color-detection-data'],
+                             [15, 'RainDetection', 'rain-detection-data'])),
+                        (36.0,
+                         ([9, 'ObjectDetection', 'object-detection-data2'],
+                          [5, 'ColorDetection', 'color-detection-data'],
+                             [13, 'RainDetection', 'rain-detection-data2'])),
+                        (44.0,
+                         ([9, 'ObjectDetection', 'object-detection-data2'],
+                          [8, 'ColorDetection', 'color-detection-data2'],
+                             [15, 'RainDetection', 'rain-detection-data'])),
+                        (52.0,
+                         ([9, 'ObjectDetection', 'object-detection-data2'],
+                          [8, 'ColorDetection', 'color-detection-data2'],
+                             [13, 'RainDetection', 'rain-detection-data2']))
+                        ]
+
+        self.assertListEqual(dataflow_choices, expected_ret)
+        self.assertListEqual(dataflow_relative_weights, [5, 5, 8, 8, 5, 5, 8, 8])
+
+    def test_create_cartesian_product_dataflow_choices(self):
+        service_worker_w_tuple_a1 = [1, 'ObjectDetection', 'object-detection-data']
+        service_worker_w_tuple_a2 = [2, 'ColorDetection', 'color-detection-data']
+        service_worker_w_tuple_a3 = [3, 'RainDetection', 'rain-detection-data']
+
+        service_worker_w_tuple_b1 = [4, 'ObjectDetection', 'object-detection-data2']
+        service_worker_w_tuple_b2 = [5, 'ColorDetection', 'color-detection-data2']
+        service_worker_w_tuple_b3 = [6, 'RainDetection', 'rain-detection-data2']
+
+        per_service_worker_keys_with_weights = {
+            'ObjectDetection': [service_worker_w_tuple_a1, service_worker_w_tuple_b1],
+            'ColorDetection': [service_worker_w_tuple_a2, service_worker_w_tuple_b2],
+            'RainDetection': [service_worker_w_tuple_a3, service_worker_w_tuple_b3],
+
+        }
+        ret = self.planner.create_cartesian_product_dataflow_choices(per_service_worker_keys_with_weights)
+        expected = [
+            ([1, 'ObjectDetection', 'object-detection-data'],
+             [2, 'ColorDetection', 'color-detection-data'],
+             [3, 'RainDetection', 'rain-detection-data']),
+            ([1, 'ObjectDetection', 'object-detection-data'],
+             [2, 'ColorDetection', 'color-detection-data'],
+             [6, 'RainDetection', 'rain-detection-data2']),
+            ([1, 'ObjectDetection', 'object-detection-data'],
+             [5, 'ColorDetection', 'color-detection-data2'],
+             [3, 'RainDetection', 'rain-detection-data']),
+            ([1, 'ObjectDetection', 'object-detection-data'],
+             [5, 'ColorDetection', 'color-detection-data2'],
+             [6, 'RainDetection', 'rain-detection-data2']),
+            ([4, 'ObjectDetection', 'object-detection-data2'],
+             [2, 'ColorDetection', 'color-detection-data'],
+             [3, 'RainDetection', 'rain-detection-data']),
+            ([4, 'ObjectDetection', 'object-detection-data2'],
+             [2, 'ColorDetection', 'color-detection-data'],
+             [6, 'RainDetection', 'rain-detection-data2']),
+            ([4, 'ObjectDetection', 'object-detection-data2'],
+             [5, 'ColorDetection', 'color-detection-data2'],
+             [3, 'RainDetection', 'rain-detection-data']),
+            ([4, 'ObjectDetection', 'object-detection-data2'],
+             [5, 'ColorDetection', 'color-detection-data2'],
+             [6, 'RainDetection', 'rain-detection-data2'])
+        ]
+
+        self.assertEqual(len(ret), 8)
+        self.assertListEqual(ret, expected)
+
+    def test_create_dataflow_choices_with_cum_weights(self):
+        dataflow_choices = [
+            ([1, 'ObjectDetection', 'object-detection-data'],
+             [2, 'ColorDetection', 'color-detection-data'],
+             [3, 'RainDetection', 'rain-detection-data']),
+            ([1, 'ObjectDetection', 'object-detection-data'],
+             [2, 'ColorDetection', 'color-detection-data'],
+             [6, 'RainDetection', 'rain-detection-data2']),
+            ([1, 'ObjectDetection', 'object-detection-data'],
+             [5, 'ColorDetection', 'color-detection-data2'],
+             [3, 'RainDetection', 'rain-detection-data']),
+            ([1, 'ObjectDetection', 'object-detection-data'],
+             [5, 'ColorDetection', 'color-detection-data2'],
+             [6, 'RainDetection', 'rain-detection-data2']),
+            ([4, 'ObjectDetection', 'object-detection-data2'],
+             [2, 'ColorDetection', 'color-detection-data'],
+             [3, 'RainDetection', 'rain-detection-data']),
+            ([4, 'ObjectDetection', 'object-detection-data2'],
+             [2, 'ColorDetection', 'color-detection-data'],
+             [6, 'RainDetection', 'rain-detection-data2']),
+            ([4, 'ObjectDetection', 'object-detection-data2'],
+             [5, 'ColorDetection', 'color-detection-data2'],
+             [3, 'RainDetection', 'rain-detection-data']),
+            ([4, 'ObjectDetection', 'object-detection-data2'],
+             [5, 'ColorDetection', 'color-detection-data2'],
+             [6, 'RainDetection', 'rain-detection-data2'])
+        ]
+        dataflow_relative_weights = [1, 1, 1, 1, 2, 2, 3, 4]
+        ret = self.planner.create_dataflow_choices_with_cum_weights(
+            dataflow_choices, dataflow_relative_weights
+        )
+        expected = [
+            (1.0,
+             ([1, 'ObjectDetection', 'object-detection-data'],
+              [2, 'ColorDetection', 'color-detection-data'],
+                 [3, 'RainDetection', 'rain-detection-data'])),
+            (2.0,
+             ([1, 'ObjectDetection', 'object-detection-data'],
+              [2, 'ColorDetection', 'color-detection-data'],
+              [6, 'RainDetection', 'rain-detection-data2'])),
+            (3.0,
+             ([1, 'ObjectDetection', 'object-detection-data'],
+              [5, 'ColorDetection', 'color-detection-data2'],
+              [3, 'RainDetection', 'rain-detection-data'])),
+            (4.0,
+             ([1, 'ObjectDetection', 'object-detection-data'],
+              [5, 'ColorDetection', 'color-detection-data2'],
+              [6, 'RainDetection', 'rain-detection-data2'])),
+            (6.0,
+             ([4, 'ObjectDetection', 'object-detection-data2'],
+              [2, 'ColorDetection', 'color-detection-data'],
+              [3, 'RainDetection', 'rain-detection-data'])),
+            (8.0,
+             ([4, 'ObjectDetection', 'object-detection-data2'],
+              [2, 'ColorDetection', 'color-detection-data'],
+              [6, 'RainDetection', 'rain-detection-data2'])),
+            (11.0,
+             ([4, 'ObjectDetection', 'object-detection-data2'],
+              [5, 'ColorDetection', 'color-detection-data2'],
+              [3, 'RainDetection', 'rain-detection-data'])),
+            (15.0,
+             ([4, 'ObjectDetection', 'object-detection-data2'],
+              [5, 'ColorDetection', 'color-detection-data2'],
+              [6, 'RainDetection', 'rain-detection-data2']))
+        ]
+        self.assertEqual(len(ret), 8)
+        self.assertListEqual(ret, expected)
