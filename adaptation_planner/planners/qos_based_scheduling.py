@@ -189,12 +189,14 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
         per_service_worker_keys_with_weights = {}
         for service in required_services:
             worker_pool = self.all_services_worker_pool[service]
+            service_workers_tuple_list = []
             selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(worker_pool)
             for worker_key, worker in selected_worker_pool.items():
                 worker_weight = self.get_worker_choice_weight_for_qos_policy(
                     worker, planned_event_count, qos_policy_name, qos_policy_value
                 )
-                per_service_worker_keys_with_weights[service] = (worker_weight, service, worker_key)
+                service_workers_tuple_list.append((worker_weight, service, worker_key))
+            per_service_worker_keys_with_weights[service] = service_workers_tuple_list
         return per_service_worker_keys_with_weights
 
     def get_worker_congestion_impact_rate(self, worker, planned_event_count):

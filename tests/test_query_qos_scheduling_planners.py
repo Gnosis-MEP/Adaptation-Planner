@@ -11,7 +11,7 @@ class TestSingleBestForQoSSinglePolicySchedulerPlanner(TestCase):
 
     def setUp(self):
         scheduler_cmd_stream_key = 'sc-cmd'
-        ce_endpoint_stream_key = 'wm-cmd'
+        ce_endpoint_stream_key = 'wm-data'
         parent_service = MagicMock()
         self.planner = SingleBestForQoSSinglePolicySchedulerPlanner(
             parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key)
@@ -124,7 +124,7 @@ class TestSingleBestForQoSSinglePolicySchedulerPlanner(TestCase):
         bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
         self.planner.all_services_worker_pool = self.all_services_worker_pool
         ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
-        expected_bf_plan = [['object-detection-ssd-gpu-data'], ['wm-cmd']]
+        expected_bf_plan = [['object-detection-ssd-gpu-data'], ['wm-data']]
         self.assertListEqual(ret, expected_bf_plan)
 
     def test_create_buffer_stream_plan_latency_min(self):
@@ -134,7 +134,7 @@ class TestSingleBestForQoSSinglePolicySchedulerPlanner(TestCase):
         bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
         self.planner.all_services_worker_pool = self.all_services_worker_pool
         ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
-        expected_bf_plan = [['object-detection-ssd-gpu-data'], ['wm-cmd']]
+        expected_bf_plan = [['object-detection-ssd-gpu-data'], ['wm-data']]
         self.assertListEqual(ret, expected_bf_plan)
 
     def test_create_buffer_stream_plan_energy_min(self):
@@ -144,7 +144,7 @@ class TestSingleBestForQoSSinglePolicySchedulerPlanner(TestCase):
         bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
         self.planner.all_services_worker_pool = self.all_services_worker_pool
         ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
-        expected_bf_plan = [['object-detection-ssd-data'], ['wm-cmd']]
+        expected_bf_plan = [['object-detection-ssd-data'], ['wm-data']]
         self.assertListEqual(ret, expected_bf_plan)
 
     @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.get_buffer_stream_required_services')
@@ -246,12 +246,11 @@ class TestSingleBestForQoSSinglePolicySchedulerPlanner(TestCase):
         self.assertIn('object-detection-ssd-gpu-data', worker_pool.keys())
 
 
-
 class TestWeightedRandomQoSSinglePolicySchedulerPlanner(TestCase):
 
     def setUp(self):
         scheduler_cmd_stream_key = 'sc-cmd'
-        ce_endpoint_stream_key = 'wm-cmd'
+        ce_endpoint_stream_key = 'wm-data'
         parent_service = MagicMock()
         self.planner = WeightedRandomQoSSinglePolicySchedulerPlanner(
             parent_service, scheduler_cmd_stream_key, ce_endpoint_stream_key)
@@ -701,13 +700,90 @@ class TestWeightedRandomQoSSinglePolicySchedulerPlanner(TestCase):
         )
 
     def test_create_filtered_and_weighted_workers_pool(self):
-        pass
+        self.all_services_worker_pool = {}
+        self.all_services_worker_pool['ObjectDetection'] = {
+            'object-detection-data': {
+                'monitoring': {
+                    'accuracy': '0.9',
+                },
+                'resources': {
+                    'planned': {
+                        'events_capacity': 0,
+                    }
+                }
+            },
+            'object-detection-data2': {
+                'monitoring': {
+                    'accuracy': '0.6',
+                },
+                'resources': {
+                    'planned': {
+                        'events_capacity': 50,
+                    }
+                }
+            }
+        }
+        self.all_services_worker_pool['ColorDetection'] = {
+            'color-detection-data': {
+                'monitoring': {
+                    'accuracy': '0.3',
+                },
+                'resources': {
+                    'planned': {
+                        'events_capacity': 100,
+                    }
+                }
+            }
+        }
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        qos_policy_name = 'accuracy'
+        qos_policy_value = 'max'
+        required_services = ['ObjectDetection', 'ColorDetection']
+        planned_event_count = 100
+        ret = self.planner.create_filtered_and_weighted_workers_pool(
+            required_services, planned_event_count, qos_policy_name, qos_policy_value
+        )
+        self.assertIn('ObjectDetection', ret.keys())
+        self.assertListEqual([(0.306, 'ObjectDetection', 'object-detection-data2')], ret['ObjectDetection'])
+        self.assertIn('ColorDetection', ret.keys())
+        self.assertEqual([(0.3, 'ColorDetection', 'color-detection-data')], ret['ColorDetection'])
 
     def test_format_dataflow_choices_to_buffer_stream_choices_plan(self):
+        dataflow_choices = [
+            (25.0,
+             ([25, 'ObjectDetection', 'object-detection-data'],
+              [85, 'ColorDetection', 'color-detection-data'])),
+            (100.0,
+             ([75, 'ObjectDetection', 'object-detection-data2'],
+              [85, 'ColorDetection', 'color-detection-data'],)),
+        ]
+        ret = self.planner.format_dataflow_choices_to_buffer_stream_choices_plan(dataflow_choices)
+
+        expected = [
+            (25.0, [['object-detection-data'], ['color-detection-data'], ['wm-data']]),
+            (100.0, [['object-detection-data2'], ['color-detection-data'], ['wm-data']])
+        ]
+
+        self.assertListEqual(ret, expected)
         pass
 
-    def test_create_buffer_stream_choices_plan(self):
-        pass
+    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_buffer_stream_required_services')
+    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_bufferstream_planned_event_count')
+    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.create_filtered_and_weighted_workers_pool')
+    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.create_dataflow_choices_with_cum_weights_and_relative_weights')
+    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.update_workers_planned_resources')
+    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.format_dataflow_choices_to_buffer_stream_choices_plan')
+    # def test_create_buffer_stream_choices_plan(self, format, updated_res, create_choices, filtered, get_event_count, get_req_serv):
 
+    #     self.planner.all_buffer_streams = self.all_buffer_streams
+    #     self.planner.all_queries_dict = self.all_queries_dict
+    #     self.planner.all_services_worker_pool = self.all_services_worker_pool
 
-
+    #     bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
+    #     ret = self.planner.create_buffer_stream_choices_plan(bufferstream_entity)
+    #     self.assertTrue(format.called)
+    #     self.assertTrue(updated_res.called)
+    #     self.assertTrue(create_choices.called)
+    #     self.assertTrue(filtered.called)
+    #     self.assertTrue(get_event_count.called)
+    #     self.assertTrue(get_req_serv.called)
