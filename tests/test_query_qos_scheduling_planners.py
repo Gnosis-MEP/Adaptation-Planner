@@ -767,23 +767,40 @@ class TestWeightedRandomQoSSinglePolicySchedulerPlanner(TestCase):
         self.assertListEqual(ret, expected)
         pass
 
-    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_buffer_stream_required_services')
-    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_bufferstream_planned_event_count')
-    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.create_filtered_and_weighted_workers_pool')
-    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.create_dataflow_choices_with_cum_weights_and_relative_weights')
-    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.update_workers_planned_resources')
-    # @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.format_dataflow_choices_to_buffer_stream_choices_plan')
-    # def test_create_buffer_stream_choices_plan(self, format, updated_res, create_choices, filtered, get_event_count, get_req_serv):
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_buffer_stream_required_services')
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.get_bufferstream_planned_event_count')
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.create_filtered_and_weighted_workers_pool')
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.create_dataflow_choices_with_cum_weights_and_relative_weights')
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.update_workers_planned_resources')
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.format_dataflow_choices_to_buffer_stream_choices_plan')
+    def test_create_buffer_stream_choices_plan(self, format_df, updated_res, create_choices, filtered, get_event_count, get_req_serv):
 
-    #     self.planner.all_buffer_streams = self.all_buffer_streams
-    #     self.planner.all_queries_dict = self.all_queries_dict
-    #     self.planner.all_services_worker_pool = self.all_services_worker_pool
+        self.planner.all_buffer_streams = self.all_buffer_streams
+        self.planner.all_queries_dict = self.all_queries_dict
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
 
-    #     bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
-    #     ret = self.planner.create_buffer_stream_choices_plan(bufferstream_entity)
-    #     self.assertTrue(format.called)
-    #     self.assertTrue(updated_res.called)
-    #     self.assertTrue(create_choices.called)
-    #     self.assertTrue(filtered.called)
-    #     self.assertTrue(get_event_count.called)
-    #     self.assertTrue(get_req_serv.called)
+        get_req_serv.return_value = ['ObjectDetection', 'ColorDetection']
+        get_event_count.return_value = 10
+        filtered.return_value = 'mocked_per_service_worker_keys_with_weights'
+        create_choices.return_value = ['dataflow_choices', 'weights']
+        format_df.return_value = 'mocked_buffer_stream_choices_plan'
+
+        ret = self.planner.create_buffer_stream_choices_plan(bufferstream_entity)
+        self.assertEqual(ret, 'mocked_buffer_stream_choices_plan')
+
+        self.assertTrue(get_event_count.called)
+        self.assertTrue(get_req_serv.called)
+
+        self.assertTrue(filtered.called)
+        filtered.assert_called_once_with(
+            ['ObjectDetection', 'ColorDetection'], 10, 'accuracy', 'min')
+
+        self.assertTrue(create_choices.called)
+        create_choices.assert_called_once_with('mocked_per_service_worker_keys_with_weights')
+
+        self.assertTrue(updated_res.called)
+        updated_res.assert_called_once_with('dataflow_choices', 'weights', 10)
+
+        self.assertTrue(format_df.called)
+        format_df.assert_called_once_with('dataflow_choices')
