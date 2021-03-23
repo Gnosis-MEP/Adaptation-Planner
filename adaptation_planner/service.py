@@ -13,7 +13,8 @@ from adaptation_planner.planners.scheduling import (
 )
 
 from adaptation_planner.planners.qos_based_scheduling import (
-    SingleBestForQoSSinglePolicySchedulerPlanner
+    SingleBestForQoSSinglePolicySchedulerPlanner,
+    WeightedRandomQoSSinglePolicySchedulerPlanner
 )
 
 from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
@@ -73,6 +74,9 @@ class AdaptationPlanner(BaseTracerService):
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
             ),
             'qos_single_best': SingleBestForQoSSinglePolicySchedulerPlanner(
+                self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
+            ),
+            'qos_weighted_random': WeightedRandomQoSSinglePolicySchedulerPlanner(
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
             ),
 
