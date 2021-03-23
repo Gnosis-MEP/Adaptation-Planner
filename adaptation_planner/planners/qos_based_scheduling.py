@@ -182,7 +182,7 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
             scheduler_cmd_stream_key,
             ce_endpoint_stream_key
         )
-        self.strategy_name = 'qos_weighted_random'
+        self.strategy_name = 'weighted_random'
 
     def create_filtered_and_weighted_workers_pool(
             self, required_services, planned_event_count, qos_policy_name, qos_policy_value):
