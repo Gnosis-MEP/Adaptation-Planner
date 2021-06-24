@@ -25,9 +25,6 @@ class BaseQoSSchedulerPlanner(BaseSchedulerPlanner):
         num_events = self.adaptation_delta * fps
         return math.ceil(num_events)
 
-    def calculate_worker_queue_space_percentage(self, worker):
-        return worker['resources']['planned']['queue_space'] / worker['monitoring']['queue_limit']
-
     def initialize_planned_worker_event_capacity(self, worker):
         if self.events_capacity_key not in worker['resources']['planned']:
             queue_size = int(worker['monitoring']['queue_size'])
