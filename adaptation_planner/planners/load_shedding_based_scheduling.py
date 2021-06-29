@@ -1,24 +1,16 @@
-import functools
-import itertools
-import math
-
-import numpy as np
-
 from .qos_based_scheduling import BaseQoSSchedulerPlanner
 
 
 class BaseLoadShaddingSchedulerPlanner(BaseQoSSchedulerPlanner):
     """Base class for scheduler planning with load shedding capability"""
 
-    def get_bufferstream_required_loadshedding_rate_for_worker(self, worker):
-        throughput = float(worker['monitoring']['throughput'])
-        max_events_capacity = self.adaptation_delta * throughput
+    def get_bufferstream_required_loadshedding_rate_for_worker(self, worker, required_events):
         events_capacity = worker['resources']['planned'].get(self.events_capacity_key, 0)
-
         if events_capacity >= 0:
             return 0
+        overloaded_events = (events_capacity * -1)
 
-        loadshedding_rate = (events_capacity * -1) / max_events_capacity
+        loadshedding_rate = overloaded_events / required_events
         return min(1, loadshedding_rate)
 
 
@@ -43,7 +35,9 @@ class SingleBestForQoSSinglePolicyLSSchedulerPlanner(BaseLoadShaddingSchedulerPl
             updated_events_capacity = events_capacity - required_events
             worker['resources']['planned'][self.events_capacity_key] = updated_events_capacity
             worst_loadshedding_rate = max(
-                worst_loadshedding_rate, self.get_bufferstream_required_loadshedding_rate_for_worker(worker))
+                worst_loadshedding_rate, self.get_bufferstream_required_loadshedding_rate_for_worker(
+                    worker, required_events)
+            )
         return worst_loadshedding_rate
 
     def create_buffer_stream_plan(self, buffer_stream_entity):
@@ -66,6 +60,9 @@ class SingleBestForQoSSinglePolicyLSSchedulerPlanner(BaseLoadShaddingSchedulerPl
         loadshedding_rate = self.update_workers_planned_resources(
             required_services, buffer_stream_plan, required_events
         )
+        # ignore loadshedding on accuracy maximisation policies
+        if qos_policy_name == 'accuracy' and qos_policy_value == 'max':
+            loadshedding_rate = 0
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
         return buffer_stream_plan, loadshedding_rate
 
