@@ -106,11 +106,58 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
         self.planner.adaptation_delta = 10
         self.planner.all_services_worker_pool = self.all_services_worker_pool
 
-        required_events = 150
+        required_events = 145
         self.worker_a['resources']['planned']['events_capacity'] = 0
         load_shedding_rate = self.planner.get_bufferstream_required_loadshedding_rate_for_worker(
             self.worker_a, required_events)
         self.assertAlmostEqual(load_shedding_rate, 0)
+
+    def test_get_bufferstream_required_loadshedding_rate_for_worker_when_extremely_overloaded(self):
+        self.planner.adaptation_delta = 10
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+
+        required_events = 200
+        self.worker_a['resources']['planned']['events_capacity'] = -600  # wont happent, but in any case
+        load_shedding_rate = self.planner.get_bufferstream_required_loadshedding_rate_for_worker(
+            self.worker_a, required_events)
+        self.assertAlmostEqual(load_shedding_rate, 1)
+
+    def test_update_workers_planned_resources_returns_load_shedding_with_single_worker(self):
+        required_events = 100
+        required_services = ['ObjectDetection']
+        buffer_stream_plan = [['object-detection-ssd-data']]
+
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        self.worker_a['resources']['planned']['events_capacity'] = 90
+
+        load_shedding_rate = self.planner.update_workers_planned_resources(
+            required_services, buffer_stream_plan, required_events)
+        self.assertAlmostEqual(load_shedding_rate, 0.1)
+
+    def test_update_workers_planned_resources_returns_load_shedding_with_single_service(self):
+        required_events = 100
+        required_services = ['ObjectDetection']
+        buffer_stream_plan = [['object-detection-ssd-data']]
+
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        self.worker_a['resources']['planned']['events_capacity'] = 90
+
+        load_shedding_rate = self.planner.update_workers_planned_resources(
+            required_services, buffer_stream_plan, required_events)
+        self.assertAlmostEqual(load_shedding_rate, 0.1)
+
+    def test_update_workers_planned_resources_returns_load_shedding_with_multiple_service(self):
+        required_events = 100
+        required_services = ['ObjectDetection', 'ObjectDetection']
+        buffer_stream_plan = [['object-detection-ssd-data'], ['object-detection-ssd-gpu-data']]
+
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        self.worker_a['resources']['planned']['events_capacity'] = 50
+        self.worker_b['resources']['planned']['events_capacity'] = 90
+
+        load_shedding_rate = self.planner.update_workers_planned_resources(
+            required_services, buffer_stream_plan, required_events)
+        self.assertAlmostEqual(load_shedding_rate, 0.5)
 
     # def test_get_bufferstream_required_loadshedding_rate_for_worker_when_underloaded(self):
     #     self.planner.adaptation_delta = 10
