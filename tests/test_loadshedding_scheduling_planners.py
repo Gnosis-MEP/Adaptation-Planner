@@ -163,8 +163,9 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
     @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.get_bufferstream_planned_event_count')
     @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.initialize_service_workers_planned_capacity')
     @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.filter_overloaded_service_worker_pool_or_all_if_empty')
+    @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.workers_key_sorted_by_qos')
     @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.update_workers_planned_resources')
-    def test_create_buffer_stream_plan_calls_proper_methods_and_returns_load_shedding(self, updated_res, w_filter, w_init, event_count, req_serv):
+    def test_create_buffer_stream_plan_calls_proper_methods_and_returns_load_shedding(self, updated_res, w_sort, w_filter, w_init, event_count, req_serv):
         self.all_queries_dict['3940d2cad2926150093a9a786163ee14']['qos_policies'] = {
             'energy_consumption': 'min'
         }
@@ -172,8 +173,6 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
         req_serv.return_value = ['ObjectDetection']
         load_shedding = 0.5
         updated_res.return_value = load_shedding
-        w_sort = MagicMock()
-        self.planner.workers_key_sorted_by_qos = w_sort
         self.planner.all_services_worker_pool = self.all_services_worker_pool
         ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
         self.assertTrue(updated_res.called)
