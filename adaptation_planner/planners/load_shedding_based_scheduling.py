@@ -119,7 +119,7 @@ class WeightedRandomQoSSinglePolicyLSSchedulerPlanner(
         for i, dataflow_choice in enumerate(dataflow_choices):
             loadshedding_rate = loadshedding_rate_choices[i]
             plan_cum_weight = dataflow_choice[0]
-            service_worker_key_tuples = dataflow_choice[2]
+            service_worker_key_tuples = dataflow_choice[1]
             dataflow = [[df[-1]] for df in service_worker_key_tuples]
             dataflow.append([self.ce_endpoint_stream_key])
             buffer_stream_choice = (loadshedding_rate, plan_cum_weight, dataflow)
