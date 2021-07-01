@@ -17,7 +17,8 @@ from adaptation_planner.planners.qos_based_scheduling import (
     WeightedRandomQoSSinglePolicySchedulerPlanner
 )
 from adaptation_planner.planners.load_shedding_based_scheduling import (
-    SingleBestForQoSSinglePolicyLSSchedulerPlanner
+    SingleBestForQoSSinglePolicyLSSchedulerPlanner,
+    WeightedRandomQoSSinglePolicyLSSchedulerPlanner
 )
 
 from adaptation_planner.conf import MOCKED_OD_STREAM_KEY
@@ -80,6 +81,9 @@ class AdaptationPlanner(BaseTracerService):
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
             ),
             'qos_weighted_random': WeightedRandomQoSSinglePolicySchedulerPlanner(
+                self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
+            ),
+            'qos_weighted_random_load_shedding': WeightedRandomQoSSinglePolicyLSSchedulerPlanner(
                 self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
             ),
             'qos_single_best_load_shedding': SingleBestForQoSSinglePolicyLSSchedulerPlanner(
