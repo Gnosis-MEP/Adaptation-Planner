@@ -748,6 +748,53 @@ class TestWeightedRandomQoSSinglePolicySchedulerPlanner(TestCase):
         self.assertIn('ColorDetection', ret.keys())
         self.assertEqual([(0.3, 'ColorDetection', 'color-detection-data')], ret['ColorDetection'])
 
+    @patch('adaptation_planner.planners.qos_based_scheduling.WeightedRandomQoSSinglePolicySchedulerPlanner.initialize_service_workers_planned_capacity')
+    def test_create_filtered_and_weighted_workers_pool_initialize_worker_capacity(self, init_cap):
+        self.all_services_worker_pool = {}
+        self.all_services_worker_pool['ObjectDetection'] = {
+            'object-detection-data': {
+                'monitoring': {
+                    'accuracy': '0.9',
+                    'throughtput': '10',
+                },
+                'resources': {
+                    'planned': {
+                    }
+                }
+            },
+            'object-detection-data2': {
+                'monitoring': {
+                    'accuracy': '0.6',
+                    'throughtput': '20',
+                },
+                'resources': {
+                    'planned': {
+                    }
+                }
+            }
+        }
+        self.all_services_worker_pool['ColorDetection'] = {
+            'color-detection-data': {
+                'monitoring': {
+                    'accuracy': '0.3',
+                    'throughtput': '30',
+                },
+                'resources': {
+                    'planned': {
+                    }
+                }
+            }
+        }
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        qos_policy_name = 'accuracy'
+        qos_policy_value = 'max'
+        required_services = ['ObjectDetection', 'ColorDetection']
+        planned_event_count = 100
+        ret = self.planner.create_filtered_and_weighted_workers_pool(
+            required_services, planned_event_count, qos_policy_name, qos_policy_value
+        )
+        self.assertTrue(init_cap.called)
+
     def test_format_dataflow_choices_to_buffer_stream_choices_plan(self):
         dataflow_choices = [
             (25.0,

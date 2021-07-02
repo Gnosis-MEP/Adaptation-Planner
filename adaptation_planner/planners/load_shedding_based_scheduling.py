@@ -1,3 +1,5 @@
+import math
+
 from .qos_based_scheduling import (
     SingleBestForQoSSinglePolicySchedulerPlanner,
     WeightedRandomQoSSinglePolicySchedulerPlanner
@@ -98,7 +100,7 @@ class WeightedRandomQoSSinglePolicyLSSchedulerPlanner(
 
             relative_weight = dataflow_choices_weights[dataflow_index]
             probability = relative_weight / total_cum_weight
-            proportional_used_resources = planned_event_count * probability
+            proportional_used_resources = math.ceil(planned_event_count * probability)
             worst_loadshedding_rate = 0
             for _, service_key, worker_key in service_worker_key_tuples:
                 worker = self.all_services_worker_pool[service_key][worker_key]

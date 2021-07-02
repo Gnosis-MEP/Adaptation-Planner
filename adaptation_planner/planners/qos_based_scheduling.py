@@ -186,6 +186,7 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
         per_service_worker_keys_with_weights = {}
         for service in required_services:
             worker_pool = self.all_services_worker_pool[service]
+            worker_pool = self.initialize_service_workers_planned_capacity(worker_pool)
             service_workers_tuple_list = []
             selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(worker_pool)
             for worker_key, worker in selected_worker_pool.items():
