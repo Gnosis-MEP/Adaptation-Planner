@@ -50,6 +50,8 @@ class AdaptationPlanner(BaseTracerService):
         self.data_validation_fields = ['id']
         self.knowledge_cmd_stream_key = 'adpk-cmd'
         self.knowledge_cmd_stream = self.stream_factory.create(key=self.knowledge_cmd_stream_key, stype='streamOnly')
+        self.analyser_cmd_stream_key = 'adpa-cmd'
+        self.analyser_cmd_stream = self.stream_factory.create(key=self.analyser_cmd_stream_key, stype='streamOnly')
 
         self.plans_being_planned = {}
         self.last_executed = {}
@@ -100,7 +102,18 @@ class AdaptationPlanner(BaseTracerService):
             return False
 
     def update_plan_on_knoledge(self, plan):
-        pass
+        # arg... I want to change the current model to a more event driven,
+        # at least on the control flow of the system
+        # untill then I'll just send this directly to the analyser so that it can update
+        # its internal db with the latest plan created.
+
+        new_event_data = {
+            'id': self.parent_service.service_based_random_event_id(),
+            'action': 'currentAdaptationPlan',
+            'data': plan
+        }
+        new_event_data.update(plan)
+        self.write_event_with_trace(new_event_data, self.analyser_cmd_stream)
 
     def check_ongoing_knowledge_queries_are_done(self, knowledge_queries):
         for query_ref, query in knowledge_queries.items():
