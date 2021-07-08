@@ -108,7 +108,7 @@ class AdaptationPlanner(BaseTracerService):
         # its internal db with the latest plan created.
 
         new_event_data = {
-            'id': self.parent_service.service_based_random_event_id(),
+            'id': self.service_based_random_event_id(),
             'action': 'currentAdaptationPlan',
             'data': plan
         }
