@@ -96,7 +96,10 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
     def test_get_bufferstream_required_loadshedding_rate_for_worker_when_overloaded(self):
         self.planner.adaptation_delta = 10
         self.planner.all_services_worker_pool = self.all_services_worker_pool
-
+        service_type = self.worker_a['monitoring']['service_type']
+        self.planner.required_services_workload_status = {
+            service_type: {'is_overloaded': True}
+        }
         required_events = 200
         self.worker_a['resources']['planned']['events_capacity'] = -50
         load_shedding_rate = self.planner.get_bufferstream_required_loadshedding_rate_for_worker(
@@ -106,6 +109,10 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
     def test_get_bufferstream_required_loadshedding_rate_for_worker_when_underloaded(self):
         self.planner.adaptation_delta = 10
         self.planner.all_services_worker_pool = self.all_services_worker_pool
+        service_type = self.worker_a['monitoring']['service_type']
+        self.planner.required_services_workload_status = {
+            service_type: {'is_overloaded': True}
+        }
 
         required_events = 145
         self.worker_a['resources']['planned']['events_capacity'] = 0
@@ -117,11 +124,30 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
         self.planner.adaptation_delta = 10
         self.planner.all_services_worker_pool = self.all_services_worker_pool
 
+        service_type = self.worker_a['monitoring']['service_type']
+        self.planner.required_services_workload_status = {
+            service_type: {'is_overloaded': True}
+        }
+
         required_events = 200
         self.worker_a['resources']['planned']['events_capacity'] = -600  # wont happent, but in any case
         load_shedding_rate = self.planner.get_bufferstream_required_loadshedding_rate_for_worker(
             self.worker_a, required_events)
         self.assertAlmostEqual(load_shedding_rate, 1)
+
+    def test_get_bufferstream_required_loadshedding_rate_for_worker_when_extremely_overloaded_but_not_system_overloaded(self):
+        self.planner.adaptation_delta = 10
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        service_type = self.worker_a['monitoring']['service_type']
+        self.planner.required_services_workload_status = {
+            service_type: {'is_overloaded': False}
+        }
+
+        required_events = 200
+        self.worker_a['resources']['planned']['events_capacity'] = -600  # wont happent, but in any case
+        load_shedding_rate = self.planner.get_bufferstream_required_loadshedding_rate_for_worker(
+            self.worker_a, required_events)
+        self.assertEqual(load_shedding_rate, 0)
 
     def test_update_workers_planned_resources_returns_load_shedding_with_single_worker(self):
         required_events = 100
@@ -130,6 +156,10 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
 
         self.planner.all_services_worker_pool = self.all_services_worker_pool
         self.worker_a['resources']['planned']['events_capacity'] = 90
+        service_type = self.worker_a['monitoring']['service_type']
+        self.planner.required_services_workload_status = {
+            service_type: {'is_overloaded': True}
+        }
 
         load_shedding_rate = self.planner.update_workers_planned_resources(
             required_services, buffer_stream_plan, required_events)
@@ -142,6 +172,10 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
 
         self.planner.all_services_worker_pool = self.all_services_worker_pool
         self.worker_a['resources']['planned']['events_capacity'] = 90
+        service_type = self.worker_a['monitoring']['service_type']
+        self.planner.required_services_workload_status = {
+            service_type: {'is_overloaded': True}
+        }
 
         load_shedding_rate = self.planner.update_workers_planned_resources(
             required_services, buffer_stream_plan, required_events)
@@ -151,6 +185,10 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
         required_events = 100
         required_services = ['ObjectDetection', 'ObjectDetection']
         buffer_stream_plan = [['object-detection-ssd-data'], ['object-detection-ssd-gpu-data']]
+        service_type = self.worker_a['monitoring']['service_type']
+        self.planner.required_services_workload_status = {
+            service_type: {'is_overloaded': True}
+        }
 
         self.planner.all_services_worker_pool = self.all_services_worker_pool
         self.worker_a['resources']['planned']['events_capacity'] = 50
@@ -200,6 +238,7 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
         self.assertEqual(best_plan[0], 'load_shedding')
         self.assertEqual(best_plan[1], None)
         self.assertEqual(best_plan[2], 'plan')
+
 
 
 class TestWeightedRandomQoSSinglePolicyLSSchedulerPlanner(TestCase):
@@ -318,6 +357,9 @@ class TestWeightedRandomQoSSinglePolicyLSSchedulerPlanner(TestCase):
         self.all_services_worker_pool = {}
         self.all_services_worker_pool['ObjectDetection'] = {
             'object-detection-data': {
+                'monitoring': {
+                    'service_type': 'ObjectDetection'
+                },
                 'resources': {
                     'planned': {
                         'events_capacity': 100,
@@ -325,6 +367,9 @@ class TestWeightedRandomQoSSinglePolicyLSSchedulerPlanner(TestCase):
                 }
             },
             'object-detection-data2': {
+                'monitoring': {
+                    'service_type': 'ObjectDetection'
+                },
                 'resources': {
                     'planned': {
                         'events_capacity': 200,
@@ -334,6 +379,9 @@ class TestWeightedRandomQoSSinglePolicyLSSchedulerPlanner(TestCase):
         }
         self.all_services_worker_pool['ColorDetection'] = {
             'color-detection-data': {
+                'monitoring': {
+                    'service_type': 'ColorDetection'
+                },
                 'resources': {
                     'planned': {
                         'events_capacity': 300,
@@ -341,7 +389,10 @@ class TestWeightedRandomQoSSinglePolicyLSSchedulerPlanner(TestCase):
                 }
             }
         }
-
+        self.planner.required_services_workload_status = {
+            'ObjectDetection': {'is_overloaded': True},
+            'ColorDetection': {'is_overloaded': True},
+        }
         dataflow_choices_with_cum_weights = [
             (25.0,
              ([25, 'ObjectDetection', 'object-detection-data'],

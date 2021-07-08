@@ -1,5 +1,7 @@
 import functools
 import itertools
+import math
+
 from ..conf import QUERY_SERVICE_CHAIN_FIELD
 
 
@@ -14,6 +16,8 @@ class BaseSchedulerPlanner(object):
         self.all_services_worker_pool = {}
         self.all_buffer_streams = {}
         self.all_queries = {}
+        self.required_services_workload_status = {}
+        self.adaptation_delta = 10
 
     def get_query_required_services(self, query):
         if QUERY_SERVICE_CHAIN_FIELD in query.keys():
@@ -85,9 +89,11 @@ class BaseSchedulerPlanner(object):
         self.all_queries = {}
         self.all_buffer_streams = {}
         self.all_services_worker_pool = {}
+        self.required_services_workload_status = {}
         self.prepare_local_queries_entities(ongoing_knowledge_queries)
         self.prepare_local_services_with_workers(ongoing_knowledge_queries)
         self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
+        self.prepare_required_services_workload_status()
 
     def prepare_local_queries_entities(self, knowledge_queries):
         # get the query about the subscriber_query
@@ -111,6 +117,45 @@ class BaseSchedulerPlanner(object):
                         self.all_queries[query_id][attribute]
                     ]
                 self.all_queries[query_id][attribute].append(value)
+
+    def prepare_local_services_with_workers(self, knowledge_queries):
+        query_ref = next(filter(lambda q: 'gnosis-mep:service_worker' in q, knowledge_queries))
+        query = knowledge_queries[query_ref]
+        data_triples = query['data']
+        workers = {}
+        for subj, pred, obj in data_triples:
+            worker_id = subj.split('/')[-1]
+            attribute = pred.split('#')[-1]
+            value = obj
+            if attribute in ['queue_space', 'queue_limit']:
+                value = int(value)
+            elif attribute in ['queue_space_percent']:
+                value = float(value)
+
+            worker_monitoring_dict = workers.setdefault(worker_id, {})
+            worker_monitoring_dict[attribute] = value
+
+        for worker_id, worker_monitoring_dict in workers.items():
+            service_type = worker_monitoring_dict['service_type']
+            service_dict = self.all_services_worker_pool.setdefault(service_type, {})
+            service_worker_dict = service_dict.setdefault(worker_id, {})
+            service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
+            service_worker_dict_monitoring.update(worker_monitoring_dict)
+            service_worker_dict_resources = service_worker_dict.setdefault('resources', {'planned': {}, 'usage': {}})
+            service_worker_dict_resources['planned']['queue_space'] = service_worker_dict_monitoring['queue_space']
+
+            service_type_workload = self.required_services_workload_status.setdefault(
+                service_type, {'system': 0, 'input': 0, 'is_overloaded': False})
+
+            capacity = math.ceil(float(service_worker_dict_monitoring['throughput']) * self.adaptation_delta)
+            capacity -= int(service_worker_dict_monitoring['queue_size'])
+            capacity = max(capacity, 0)
+            service_type_workload['system'] += capacity
+
+            if 'energy_consumption' in service_worker_dict_monitoring:
+                service_worker_dict_resources['usage']['energy_consumption'] = float(
+                    service_worker_dict_monitoring['energy_consumption']
+                )
 
     def prepare_local_buffer_stream_entities(self, knowledge_queries):
         # get the query about the buffer streams
@@ -142,36 +187,22 @@ class BaseSchedulerPlanner(object):
                     ]
                 self.all_buffer_streams[buffer_stream_key][attribute].append(value)
 
-    def prepare_local_services_with_workers(self, knowledge_queries):
-        query_ref = next(filter(lambda q: 'gnosis-mep:service_worker' in q, knowledge_queries))
-        query = knowledge_queries[query_ref]
-        data_triples = query['data']
-        workers = {}
-        for subj, pred, obj in data_triples:
-            worker_id = subj.split('/')[-1]
-            attribute = pred.split('#')[-1]
-            value = obj
-            if attribute in ['queue_space', 'queue_limit']:
-                value = int(value)
-            elif attribute in ['queue_space_percent']:
-                value = float(value)
+    def prepare_required_services_workload_status(self):
+        is_system_overloaded = False
 
-            worker_monitoring_dict = workers.setdefault(worker_id, {})
-            worker_monitoring_dict[attribute] = value
+        for buffer_stream_key, buffer_stream_entity in self.all_buffer_streams.items():
+            required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
+            for service_type in required_services:
+                service_type_workload = self.required_services_workload_status.setdefault(
+                    service_type, {'system': 0, 'input': 0, 'is_overloaded': False})
 
-        for worker_id, worker_monitoring_dict in workers.items():
-            service_type = worker_monitoring_dict['service_type']
-            service_dict = self.all_services_worker_pool.setdefault(service_type, {})
+                service_type_workload['input'] += (float(buffer_stream_entity['fps']) * self.adaptation_delta)
+                is_service_type_overloaded = service_type_workload['system'] < service_type_workload['input']
+                service_type_workload['is_overloaded'] = is_service_type_overloaded
+                if not is_system_overloaded and is_service_type_overloaded:
+                    is_system_overloaded = True
 
-            service_worker_dict = service_dict.setdefault(worker_id, {})
-            service_worker_dict_monitoring = service_worker_dict.setdefault('monitoring', {})
-            service_worker_dict_monitoring.update(worker_monitoring_dict)
-            service_worker_dict_resources = service_worker_dict.setdefault('resources', {'planned': {}, 'usage': {}})
-            service_worker_dict_resources['planned']['queue_space'] = service_worker_dict_monitoring['queue_space']
-            if 'energy_consumption' in service_worker_dict_monitoring:
-                service_worker_dict_resources['usage']['energy_consumption'] = float(
-                    service_worker_dict_monitoring['energy_consumption']
-                )
+        self.required_services_workload_status['_status'] = is_system_overloaded
 
     def plan_stage_waiting_knowledge_queries(self, cause, plan):
         ongoing_knowledge_queries = plan.get('ongoing_knowledge_queries', {})
