@@ -165,7 +165,7 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
             required_services, buffer_stream_plan, required_events)
         self.assertAlmostEqual(load_shedding_rate, 0.1)
 
-    def test_update_workers_planned_resources_returns_load_shedding_with_single_service(self):
+    def test_update_workers_planned_resources_returns_load_shedding_with_shouldnt_load_shed_if_not_overloaded(self):
         required_events = 100
         required_services = ['ObjectDetection']
         buffer_stream_plan = [['object-detection-ssd-data']]
@@ -174,12 +174,12 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
         self.worker_a['resources']['planned']['events_capacity'] = 90
         service_type = self.worker_a['monitoring']['service_type']
         self.planner.required_services_workload_status = {
-            service_type: {'is_overloaded': True}
+            service_type: {'is_overloaded': False}
         }
 
         load_shedding_rate = self.planner.update_workers_planned_resources(
             required_services, buffer_stream_plan, required_events)
-        self.assertAlmostEqual(load_shedding_rate, 0.1)
+        self.assertEqual(load_shedding_rate, 0)
 
     def test_update_workers_planned_resources_returns_load_shedding_with_multiple_service(self):
         required_events = 100

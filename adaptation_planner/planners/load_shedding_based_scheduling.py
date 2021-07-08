@@ -50,9 +50,10 @@ class SingleBestForQoSSinglePolicyLSSchedulerPlanner(
             events_capacity = worker['resources']['planned'].get(self.events_capacity_key, 0)
             updated_events_capacity = events_capacity - required_events
             worker['resources']['planned'][self.events_capacity_key] = updated_events_capacity
+            load_shedding = self.get_bufferstream_required_loadshedding_rate_for_worker(
+                worker, required_events)
             worst_loadshedding_rate = max(
-                worst_loadshedding_rate, self.get_bufferstream_required_loadshedding_rate_for_worker(
-                    worker, required_events)
+                worst_loadshedding_rate, load_shedding
             )
         return worst_loadshedding_rate
 

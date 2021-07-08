@@ -93,7 +93,7 @@ class BaseSchedulerPlanner(object):
         self.prepare_local_queries_entities(ongoing_knowledge_queries)
         self.prepare_local_services_with_workers(ongoing_knowledge_queries)
         self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
-        self.prepare_required_services_workload_status()
+        # self.prepare_required_services_workload_status()
 
     def prepare_local_queries_entities(self, knowledge_queries):
         # get the query about the subscriber_query
@@ -151,6 +151,7 @@ class BaseSchedulerPlanner(object):
             capacity -= int(service_worker_dict_monitoring['queue_size'])
             capacity = max(capacity, 0)
             service_type_workload['system'] += capacity
+            service_type_workload['is_overloaded'] = service_type_workload['system'] <= 0
 
             if 'energy_consumption' in service_worker_dict_monitoring:
                 service_worker_dict_resources['usage']['energy_consumption'] = float(
