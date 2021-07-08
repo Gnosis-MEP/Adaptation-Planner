@@ -107,12 +107,14 @@ class AdaptationPlanner(BaseTracerService):
         # untill then I'll just send this directly to the analyser so that it can update
         # its internal db with the latest plan created.
 
+        if plan.get('execution_plan') is None:
+            return
+        clean_plan = {k: v for k, v in plan.items() if k != 'executor'}
         new_event_data = {
             'id': self.service_based_random_event_id(),
             'action': 'currentAdaptationPlan',
-            'data': plan
+            'data': clean_plan
         }
-        new_event_data.update(plan)
         self.write_event_with_trace(new_event_data, self.analyser_cmd_stream)
 
     def check_ongoing_knowledge_queries_are_done(self, knowledge_queries):
