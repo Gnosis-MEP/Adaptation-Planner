@@ -38,15 +38,22 @@ class BaseQoSSchedulerPlanner(BaseSchedulerPlanner):
             self.initialize_planned_worker_event_capacity(worker)
         return worker_pool
 
-    def get_worker_events_capacity(self, worker):
-        return worker['resources']['planned'].get(self.events_capacity_key, 0)
+    def get_worker_events_capacity(self, worker, extra_capacity_multiplier=0):
+        current_capacity = worker['resources']['planned'].get(self.events_capacity_key, 0)
+        if extra_capacity_multiplier == 0:
+            return current_capacity
 
-    def is_worker_overloaded(self, worker):
-        return self.get_worker_events_capacity(worker) <= 0
+        throughput = float(worker['monitoring']['throughput'])
+        extra_capacity = throughput * self.adaptation_delta * extra_capacity_multiplier
 
-    def filter_overloaded_service_worker_pool_or_all_if_empty(self, worker_pool):
+        return current_capacity + extra_capacity
+
+    def is_worker_overloaded(self, worker, extra_capacity_multiplier=0):
+        return self.get_worker_events_capacity(worker, extra_capacity_multiplier) <= 0
+
+    def filter_overloaded_service_worker_pool_or_all_if_empty(self, worker_pool, extra_capacity_multiplier=0):
         selected_worker_pool = dict(filter(
-            lambda kv: not self.is_worker_overloaded(kv[1]), worker_pool.items()
+            lambda kv: not self.is_worker_overloaded(kv[1], extra_capacity_multiplier), worker_pool.items()
         ))
         if len(selected_worker_pool) == 0:
             selected_worker_pool = worker_pool
@@ -135,7 +142,12 @@ class SingleBestForQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
         for service in required_services:
             worker_pool = self.all_services_worker_pool[service]
             worker_pool = self.initialize_service_workers_planned_capacity(worker_pool)
-            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(worker_pool)
+            extra_capacity_multiplier = 0
+            if qos_policy_name == 'energy_consumption' and qos_policy_value == 'min':
+                extra_capacity_multiplier = 1
+
+            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
+                worker_pool, extra_capacity_multiplier)
 
             qos_sorted_workers_keys = self.workers_key_sorted_by_qos(
                 selected_worker_pool, qos_policy_name, qos_policy_value)
@@ -188,7 +200,11 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
             worker_pool = self.all_services_worker_pool[service]
             worker_pool = self.initialize_service_workers_planned_capacity(worker_pool)
             service_workers_tuple_list = []
-            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(worker_pool)
+            extra_capacity_multiplier = 0
+            if qos_policy_name == 'energy_consumption' and qos_policy_value == 'min':
+                extra_capacity_multiplier = 1
+            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
+                worker_pool, extra_capacity_multiplier)
             for worker_key, worker in selected_worker_pool.items():
                 worker_weight = self.get_worker_choice_weight_for_qos_policy(
                     worker, planned_event_count, qos_policy_name, qos_policy_value
@@ -197,9 +213,9 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
             per_service_worker_keys_with_weights[service] = service_workers_tuple_list
         return per_service_worker_keys_with_weights
 
-    def get_worker_congestion_impact_rate(self, worker, planned_event_count):
+    def get_worker_congestion_impact_rate(self, worker, planned_event_count, extra_capacity_multiplier=0):
         # get_bufferstream_planned_event_count
-        worker_events_capacity = self.get_worker_events_capacity(worker)
+        worker_events_capacity = self.get_worker_events_capacity(worker, extra_capacity_multiplier)
         # if already overloaded, then make it so that the events capacity
         # affects very strongly the final weigth
         if worker_events_capacity < 0:
@@ -222,11 +238,16 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
             qos_policy_name = 'throughput'
             inverse = False if inverse else True
 
+        extra_capacity_multiplier = 0
+        if qos_policy_name == 'energy_consumption' and qos_policy_value == 'min':
+            extra_capacity_multiplier = 1
+
         weight = float(worker['monitoring'][qos_policy_name])
         if inverse:
             weight = 1 / weight
 
-        congestion_impact_rate = self.get_worker_congestion_impact_rate(worker, planned_event_count)
+        congestion_impact_rate = self.get_worker_congestion_impact_rate(
+            worker, planned_event_count, extra_capacity_multiplier)
         weight_with_congestion = weight * congestion_impact_rate
         return weight_with_congestion
 
