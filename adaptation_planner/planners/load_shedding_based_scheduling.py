@@ -65,9 +65,8 @@ class SingleBestForQoSSinglePolicyLSSchedulerPlanner(
 
         buffer_stream_plan = []
         for service in required_services:
-            worker_pool = self.all_services_worker_pool[service]
-            worker_pool = self.initialize_service_workers_planned_capacity(worker_pool)
-            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(worker_pool)
+            selected_worker_pool = self.get_init_workers_filter_based_on_qos_policy(
+                service, qos_policy_name, qos_policy_value)
 
             qos_sorted_workers_keys = self.workers_key_sorted_by_qos(
                 selected_worker_pool, qos_policy_name, qos_policy_value)
