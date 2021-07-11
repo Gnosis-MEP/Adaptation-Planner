@@ -150,12 +150,33 @@ class TestSingleBestForQoSSinglePolicySchedulerPlanner(TestCase):
     @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.get_buffer_stream_required_services')
     @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.get_bufferstream_planned_event_count')
     @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.initialize_service_workers_planned_capacity')
+    @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.filter_best_than_avg_and_overloaded_service_worker_pool_or_all')
+    @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.workers_key_sorted_by_qos')
+    @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.update_workers_planned_resources')
+    def test_create_buffer_stream_plan_calls_proper_methods_if_energy_reduct(self, updated_res, w_sort, w_filter, w_init, event_count, req_serv):
+        self.all_queries_dict['3940d2cad2926150093a9a786163ee14']['qos_policies'] = {
+            'energy_consumption': 'min'
+        }
+        bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
+        req_serv.return_value = ['ObjectDetection']
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
+        self.assertTrue(updated_res.called)
+        self.assertTrue(w_sort.called)
+        self.assertTrue(w_filter.called)
+        self.assertTrue(w_init.called)
+        self.assertTrue(event_count.called)
+        self.assertTrue(req_serv.called)
+
+    @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.get_buffer_stream_required_services')
+    @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.get_bufferstream_planned_event_count')
+    @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.initialize_service_workers_planned_capacity')
     @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.filter_overloaded_service_worker_pool_or_all_if_empty')
     @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.workers_key_sorted_by_qos')
     @patch('adaptation_planner.planners.qos_based_scheduling.SingleBestForQoSSinglePolicySchedulerPlanner.update_workers_planned_resources')
-    def test_create_buffer_stream_plan_calls_proper_methods(self, updated_res, w_sort, w_filter, w_init, event_count, req_serv):
+    def test_create_buffer_stream_plan_calls_proper_methods_if_not_energy_reduct(self, updated_res, w_sort, w_filter, w_init, event_count, req_serv):
         self.all_queries_dict['3940d2cad2926150093a9a786163ee14']['qos_policies'] = {
-            'energy_consumption': 'min'
+            'latency': 'min'
         }
         bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
         req_serv.return_value = ['ObjectDetection']

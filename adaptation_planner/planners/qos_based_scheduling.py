@@ -51,6 +51,26 @@ class BaseQoSSchedulerPlanner(BaseSchedulerPlanner):
     def is_worker_overloaded(self, worker, extra_capacity_multiplier=0):
         return self.get_worker_events_capacity(worker, extra_capacity_multiplier) <= 0
 
+    def filter_best_than_avg_and_overloaded_service_worker_pool_or_all(self, worker_pool):
+        full_filter_pool = {}
+        better_or_equal_avg_pool = {}
+        if len(worker_pool.keys()) == 0:
+            return worker_pool
+
+        total_energy_consumption = sum([float(w['monitoring']['energy_consumption']) for w in worker_pool.values()])
+        avg_energy = total_energy_consumption / len(worker_pool.keys())
+        for worker_key, worker in worker_pool.items():
+            is_avg_on = float(worker['monitoring']['energy_consumption']) <= avg_energy
+            if is_avg_on:
+                better_or_equal_avg_pool[worker_key] = worker
+                if not self.is_worker_overloaded(worker):
+                    full_filter_pool[worker_key] = worker
+
+        selected_worker_pool = better_or_equal_avg_pool
+        if len(full_filter_pool.keys()) != 0:
+            selected_worker_pool = full_filter_pool
+        return selected_worker_pool
+
     def filter_overloaded_service_worker_pool_or_all_if_empty(self, worker_pool, extra_capacity_multiplier=0):
         selected_worker_pool = dict(filter(
             lambda kv: not self.is_worker_overloaded(kv[1], extra_capacity_multiplier), worker_pool.items()
@@ -142,12 +162,12 @@ class SingleBestForQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
         for service in required_services:
             worker_pool = self.all_services_worker_pool[service]
             worker_pool = self.initialize_service_workers_planned_capacity(worker_pool)
-            extra_capacity_multiplier = 0
             if qos_policy_name == 'energy_consumption' and qos_policy_value == 'min':
-                extra_capacity_multiplier = 1
-
-            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
-                worker_pool, extra_capacity_multiplier)
+                selected_worker_pool = self.filter_best_than_avg_and_overloaded_service_worker_pool_or_all(
+                    worker_pool)
+            else:
+                selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
+                    worker_pool)
 
             qos_sorted_workers_keys = self.workers_key_sorted_by_qos(
                 selected_worker_pool, qos_policy_name, qos_policy_value)
@@ -200,11 +220,12 @@ class WeightedRandomQoSSinglePolicySchedulerPlanner(BaseQoSSchedulerPlanner):
             worker_pool = self.all_services_worker_pool[service]
             worker_pool = self.initialize_service_workers_planned_capacity(worker_pool)
             service_workers_tuple_list = []
-            extra_capacity_multiplier = 0
             if qos_policy_name == 'energy_consumption' and qos_policy_value == 'min':
-                extra_capacity_multiplier = 1
-            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
-                worker_pool, extra_capacity_multiplier)
+                selected_worker_pool = self.filter_best_than_avg_and_overloaded_service_worker_pool_or_all(
+                    worker_pool)
+            else:
+                selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
+                    worker_pool)
             for worker_key, worker in selected_worker_pool.items():
                 worker_weight = self.get_worker_choice_weight_for_qos_policy(
                     worker, planned_event_count, qos_policy_name, qos_policy_value
