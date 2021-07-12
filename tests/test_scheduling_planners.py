@@ -283,7 +283,7 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                     [
                         "http://gnosis-mep.org/service_worker/color-detection-data",
                         "http://gnosis-mep.org/service_worker#queue_size",
-                        "301"
+                        "300"
                     ],
                     [
                         "http://gnosis-mep.org/service_worker/object-detection-ssd-gpu-data",
@@ -390,7 +390,7 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
                         "queue_limit": 100,
                         "queue_space_percent": 1.0,
                         "throughput": "30.0",
-                        "queue_size": "301"
+                        "queue_size": "300"
                     },
                     "resources": {
                         "planned": {
@@ -408,7 +408,8 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
             {
                 'system': 100,
                 'input': 0,
-                'is_overloaded': False
+                'is_overloaded': False,
+                'has_overloaded_worker': True,
             }
         )
         self.assertDictEqual(
@@ -416,7 +417,8 @@ class TestMaxEnergyForQueueLimitSchedulerPlanner(MockedServiceStreamTestCase):
             {
                 'system': 0,
                 'input': 0,
-                'is_overloaded': True
+                'is_overloaded': False,
+                'has_overloaded_worker': False,
             }
         )
 

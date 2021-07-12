@@ -8,8 +8,6 @@ from .qos_based_scheduling import (
 
 class BaseLoadShaddingSchedulerPlannerMixin():
     """Base mixin for scheduler planning with load shedding capability"""
-    WORKLOAD_STATUS_UNDERLOAD = 0
-    WORKLOAD_STATUS_OVERLOAD = 1
 
     def get_bufferstream_required_loadshedding_rate_for_worker(self, worker, required_events):
         events_capacity = worker['resources']['planned'].get(self.events_capacity_key, 0)
@@ -23,10 +21,6 @@ class BaseLoadShaddingSchedulerPlannerMixin():
 
         loadshedding_rate = overloaded_events / required_events
         return min(1, loadshedding_rate)
-
-    def updated_overall_system_workload_status(self):
-        if not hasattr(self, 'system_workload_status'):
-            self.system_workload_status = self.WORKLOAD_STATUS_UNDERLOAD
 
 
 class SingleBestForQoSSinglePolicyLSSchedulerPlanner(

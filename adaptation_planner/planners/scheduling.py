@@ -93,7 +93,7 @@ class BaseSchedulerPlanner(object):
         self.prepare_local_queries_entities(ongoing_knowledge_queries)
         self.prepare_local_services_with_workers(ongoing_knowledge_queries)
         self.prepare_local_buffer_stream_entities(ongoing_knowledge_queries)
-        # self.prepare_required_services_workload_status()
+        self.prepare_required_services_workload_status()
 
     def prepare_local_queries_entities(self, knowledge_queries):
         # get the query about the subscriber_query
@@ -149,9 +149,10 @@ class BaseSchedulerPlanner(object):
 
             capacity = math.ceil(float(service_worker_dict_monitoring['throughput']) * self.adaptation_delta)
             capacity -= int(service_worker_dict_monitoring['queue_size'])
+            has_overloaded_worker = capacity < 0
             capacity = max(capacity, 0)
             service_type_workload['system'] += capacity
-            service_type_workload['is_overloaded'] = service_type_workload['system'] <= 0
+            service_type_workload['has_overloaded_worker'] = service_type_workload.get('has_overloaded_worker', False) or has_overloaded_worker
 
             if 'energy_consumption' in service_worker_dict_monitoring:
                 service_worker_dict_resources['usage']['energy_consumption'] = float(
@@ -199,8 +200,10 @@ class BaseSchedulerPlanner(object):
 
                 service_type_workload['input'] += (float(buffer_stream_entity['fps']) * self.adaptation_delta)
                 is_service_type_overloaded = service_type_workload['system'] < service_type_workload['input']
-                service_type_workload['is_overloaded'] = is_service_type_overloaded
-                if not is_system_overloaded and is_service_type_overloaded:
+                has_overloaded_worker = service_type_workload.get('has_overloaded_worker', False)
+                is_overloaded = is_service_type_overloaded and has_overloaded_worker
+                service_type_workload['is_overloaded'] = is_overloaded
+                if not is_system_overloaded and is_overloaded:
                     is_system_overloaded = True
 
         self.required_services_workload_status['_status'] = is_system_overloaded
