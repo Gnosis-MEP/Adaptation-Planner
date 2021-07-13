@@ -204,9 +204,34 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
     @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.filter_best_than_avg_and_overloaded_service_worker_pool_or_all')
     @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.workers_key_sorted_by_qos')
     @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.update_workers_planned_resources')
-    def test_create_buffer_stream_plan_calls_proper_methods_and_returns_load_shedding(self, updated_res, w_sort, w_filter, w_init, event_count, req_serv):
+    def test_create_buffer_stream_plan_calls_proper_methods_and_returns_load_shedding_zero_for_not_latency(self, updated_res, w_sort, w_filter, w_init, event_count, req_serv):
         self.all_queries_dict['3940d2cad2926150093a9a786163ee14']['qos_policies'] = {
             'energy_consumption': 'min'
+        }
+        bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
+        req_serv.return_value = ['ObjectDetection']
+        load_shedding = 1
+        updated_res.return_value = load_shedding
+        self.planner.all_services_worker_pool = self.all_services_worker_pool
+        ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
+        self.assertTrue(updated_res.called)
+        self.assertTrue(w_sort.called)
+        self.assertTrue(w_filter.called)
+        self.assertTrue(w_init.called)
+        self.assertTrue(event_count.called)
+        self.assertTrue(req_serv.called)
+        self.assertEquals(len(ret), 2)
+        self.assertEquals(ret[1], 0)
+
+    @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.get_buffer_stream_required_services')
+    @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.get_bufferstream_planned_event_count')
+    @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.initialize_service_workers_planned_capacity')
+    @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.filter_overloaded_service_worker_pool_or_all_if_empty')
+    @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.workers_key_sorted_by_qos')
+    @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.update_workers_planned_resources')
+    def test_create_buffer_stream_plan_calls_proper_methods_and_returns_load_shedding_for_latency(self, updated_res, w_sort, w_filter, w_init, event_count, req_serv):
+        self.all_queries_dict['3940d2cad2926150093a9a786163ee14']['qos_policies'] = {
+            'latency': 'min'
         }
         bufferstream_entity = self.all_buffer_streams['b41eeb0408847b28474f362f5642635e']
         req_serv.return_value = ['ObjectDetection']
@@ -221,7 +246,7 @@ class TestSingleBestForQoSSinglePolicyLSSchedulerPlanner(TestCase):
         self.assertTrue(event_count.called)
         self.assertTrue(req_serv.called)
         self.assertEquals(len(ret), 2)
-        self.assertEquals(ret[1], 0.5)
+        self.assertEquals(ret[1], load_shedding)
 
     @patch('adaptation_planner.planners.load_shedding_based_scheduling.SingleBestForQoSSinglePolicyLSSchedulerPlanner.create_buffer_stream_plan')
     def test_create_buffer_stream_choices_plan_creates_plan_choices_with_load_shedding(self, create_bsp):

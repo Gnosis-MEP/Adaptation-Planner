@@ -70,8 +70,8 @@ class SingleBestForQoSSinglePolicyLSSchedulerPlanner(
         loadshedding_rate = self.update_workers_planned_resources(
             required_services, buffer_stream_plan, required_events
         )
-        # ignore loadshedding on accuracy maximisation policies
-        if qos_policy_name == 'accuracy' and qos_policy_value == 'max':
+        # only apply loadshedding on latency min policies
+        if qos_policy_name != 'latency' or qos_policy_value != 'min':
             loadshedding_rate = 0
         buffer_stream_plan.append([self.ce_endpoint_stream_key])
         return buffer_stream_plan, loadshedding_rate
@@ -147,8 +147,8 @@ class WeightedRandomQoSSinglePolicyLSSchedulerPlanner(
         loadshedding_rate_choices = self.update_workers_planned_resources(
             dataflow_choices, weights, planned_event_count)
 
-        # ignore loadshedding on accuracy maximisation policies
-        if qos_policy_name == 'accuracy' and qos_policy_value == 'max':
+        # only apply loadshedding on latency min policies
+        if qos_policy_name != 'latency' or qos_policy_value != 'min':
             loadshedding_rate_choices = [0 for i in loadshedding_rate_choices]
 
         buffer_stream_choices_plan = self.format_dataflow_choices_to_buffer_stream_choices_plan(
