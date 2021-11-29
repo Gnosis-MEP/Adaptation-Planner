@@ -148,34 +148,14 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
     #             ongoing_query['data'] = query_data
     #             self.update_plan(plan=plan)
 
-    def initialize_plan(self, change_request):
-        request_type = change_request['change']['type']
-        plan_type = self.request_type_to_plan_map[request_type]
-        new_plan = {
-            'type': plan_type,
-            'execution_plan': None,
-            'change_request': change_request
-        }
-        return new_plan
-
     def publish_adaptation_plan(self, event_type, new_plan):
         new_event_data = {
-            'id': self.parent_service.service_based_random_event_id(),
+            'id': self.service_based_random_event_id(),
             'plan': new_plan
         }
-        self.parent_service.publish_event_type_to_stream(
+        self.publish_event_type_to_stream(
             event_type=event_type, new_event_data=new_event_data
         )
-
-    # def process_action(self, action, event_data, json_msg):
-    #     if not super(AdaptationPlanner, self).process_action(action, event_data, json_msg):
-    #         return False
-    #     if action == 'changePlanRequest':
-    #         self.plan_for_change_request(event_data)
-    #     elif action == 'answerQueryKnowledge':
-    #         query = event_data['query']
-    #         query_data = event_data['data']
-    #         self.update_plans_from_queries_result(query, query_data)
 
     def update_bufferstreams_from_new_query(self, new_query):
         query_bufferstream_dict = new_query.get('buffer_stream', None)
@@ -195,11 +175,25 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         self.all_queries[query_id] = new_query
         self.update_bufferstreams_from_new_query(new_query)
 
+    def initialize_plan(self, change_request):
+        request_type = change_request['type']
+        plan_type = self.request_type_to_plan_map[request_type]
+        new_plan = {
+            'type': plan_type,
+            'execution_plan': None,
+            'change_request': change_request
+        }
+        return new_plan
+
     def process_plan_requested(self, event_data):
         change_request = event_data['change']
         new_plan = self.scheduler_planner.plan(change_request=change_request)
         event_type = new_plan['type']
         self.publish_adaptation_plan(event_type, new_plan=new_plan)
+
+    def process_service_workers_monitored(self, event_data):
+        service_workers = event_data['service_workers']
+        self.all_services_worker_pool = service_workers
 
     def process_event_type(self, event_type, event_data, json_msg):
         if not super(AdaptationPlanner, self).process_event_type(event_type, event_data, json_msg):
@@ -212,8 +206,8 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         ]
         if event_type == 'QueryCreated':
             self.process_query_created(event_data)
-        # elif event_type == 'ServiceWorkerMonitoring':
-        #     self.process_service_worker_monitoring(event_data)
+        elif event_type == 'ServiceWorkersStreamMonitored':
+            self.process_service_workers_monitored(event_data)
         elif event_type in plan_requests_types:
             self.process_plan_requested(event_data)
 
@@ -225,6 +219,8 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         self._log_dict('Last plan executed:', self.last_executed)
         # self.logger.info(f'Last execution_plan: {self.last_executed.get("execution_plan", {})}')
         self._log_dict('All queries', self.all_queries)
+        self._log_dict('All Service workers', self.all_services_worker_pool)
+        self._log_dict('All Bufferstreams', self.all_buffer_streams)
         self.logger.debug(f'- Scheduler Planner: {self.scheduler_planner}')
 
     def run(self):
