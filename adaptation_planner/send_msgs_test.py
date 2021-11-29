@@ -8,7 +8,7 @@ from adaptation_planner.conf import (
     REDIS_PORT,
     LISTEN_EVENT_TYPE_QUERY_CREATED,
     LISTEN_EVENT_TYPE_SERVICE_WORKERS_STREAM_MONITORED,
-    LISTEN_EVENT_TYPE_QUERY_SCHEDULING_PLAN_REQUESTED,
+    LISTEN_EVENT_TYPE_NEW_QUERY_SCHEDULING_PLAN_REQUESTED,
 )
 
 
@@ -25,7 +25,7 @@ def main():
     stream_factory = RedisStreamFactory(host=REDIS_ADDRESS, port=REDIS_PORT)
     query_created_cmd = stream_factory.create(LISTEN_EVENT_TYPE_QUERY_CREATED, stype='streamOnly')
     servicesmon_cmd = stream_factory.create(LISTEN_EVENT_TYPE_SERVICE_WORKERS_STREAM_MONITORED, stype='streamOnly')
-    queryschplan_cmd = stream_factory.create(LISTEN_EVENT_TYPE_QUERY_SCHEDULING_PLAN_REQUESTED, stype='streamOnly')
+    queryschplan_cmd = stream_factory.create(LISTEN_EVENT_TYPE_NEW_QUERY_SCHEDULING_PLAN_REQUESTED, stype='streamOnly')
 
     query_created_cmd.write_events(
         new_msg(
@@ -91,7 +91,7 @@ def main():
             {
 
                 'change': {
-                    'type': 'QuerySchedulingPlanRequested',
+                    'type': LISTEN_EVENT_TYPE_NEW_QUERY_SCHEDULING_PLAN_REQUESTED,
                     'cause': {'change_cause': 'some dict'}
                 }
             }

@@ -4,6 +4,9 @@ from event_service_utils.logging.decorators import timer_logger
 from event_service_utils.services.event_driven import BaseEventDrivenCMDService
 from event_service_utils.tracing.jaeger import init_tracer
 
+from adaptation_planner.planners.event_driven.baselines import (
+    RandomSchedulerPlanner
+)
 from adaptation_planner.planners.event_driven.qqos_based import (
     QQoS_TK_LP_LS_SchedulerPlanner
 )
@@ -32,8 +35,7 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         self.cmd_validation_fields = ['id']
         self.data_validation_fields = ['id']
 
-        self.plans_being_planned = {}
-        self.last_executed = {}
+        self.latest_plan = {}
 
         self.ce_endpoint_stream_key = 'wm-data'
         self.scheduler_planner_type = scheduler_planner_type
@@ -48,11 +50,14 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
             'ServiceWorkerOverloadedPlanRequested': 'ServiceWorkerOverloadedPlanned',
             'ServiceWorkerBestIdlePlanRequested': 'ServiceWorkerBestIdlePlanned',
             'UnnecessaryLoadSheddingPlanRequested': 'UnnecessaryLoadSheddingPlanned',
-            'QuerySchedulingPlanRequested': 'QuerySchedulingPlanned',
+            'NewQuerySchedulingPlanRequested': 'NewQuerySchedulingPlanned',
         }
 
     def setup_scheduler_planner(self):
         self.available_scheduler_planners = {
+            'random': RandomSchedulerPlanner(
+                self, self.ce_endpoint_stream_key,
+            ),
             'QQoS-TK-LP-LS': QQoS_TK_LP_LS_SchedulerPlanner(
                 self, self.ce_endpoint_stream_key
             ),
@@ -63,9 +68,9 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         #     'weighted_random': WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(
         #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
         #     ),
-        #     'random': RandomSchedulerPlanner(
-        #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-        #     ),
+            # 'random': RandomSchedulerPlanner(
+            #     self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
+            # ),
         #     'round_robin': RoundRobinSchedulerPlanner(
         #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
         #     ),
@@ -86,73 +91,12 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
 
         self.scheduler_planner = self.available_scheduler_planners[self.scheduler_planner_type]
 
-    # def update_plan_on_knoledge(self, plan):
-    #     # arg... I want to change the current model to a more event driven,
-    #     # at least on the control flow of the system
-    #     # untill then I'll just send this directly to the analyser so that it can update
-    #     # its internal db with the latest plan created.
-
-    #     if plan is not None and plan.get('execution_plan') is not None:
-    #         clean_plan = {k: v for k, v in plan.items() if k != 'executor'}
-    #         new_event_data = {
-    #             'id': self.service_based_random_event_id(),
-    #             'action': 'currentAdaptationPlan',
-    #             'data': clean_plan
-    #         }
-    #         self.write_event_with_trace(new_event_data, self.analyser_cmd_stream)
-    #     return
-
-    # def check_ongoing_knowledge_queries_are_done(self, knowledge_queries):
-    #     for query_ref, query in knowledge_queries.items():
-    #         if query.get('data') is None:
-    #             return False
-    #     return True
-
-    # def query_knowledge(self, query):
-    #     new_event_data = {
-    #         'id': self.service_based_random_event_id(),
-    #         'action': 'queryKnowledge',
-    #         'query': query,
-    #         'answer_to_stream': self.service_cmd_key
-    #     }
-    #     self.write_event_with_trace(new_event_data, self.knowledge_cmd_stream)
-
-    # def update_plan(self, change_request=None, plan=None):
-    #     if change_request is None:
-    #         change_request = plan['change_request']
-
-    #     changed = False
-    #     if change_request['type'] == 'incorrectSchedulerPlan':
-    #         self.scheduler_planner.plan(change_request, plan=plan)
-    #         changed = True
-
-    #     if change_request['type'] in ['serviceWorkerOverloaded', 'serviceWorkerBestIdle']:
-    #         self.scheduler_planner.plan(change_request, plan=plan)
-    #         changed = True
-
-    #     if changed:
-    #         self.update_plan_on_knoledge(plan)
-
-    # def plan_for_change_request(self, event_data):
-    #     change_request = event_data['change']
-    #     self.update_plan(change_request=change_request, plan=None)
-
-    # def update_plans_from_queries_result(self, query, query_data):
-    #     query_ref = query['query_ref']
-    #     for plan_id, plan in self.plans_being_planned.items():
-    #         plan_ongoing_queries = plan.get('ongoing_knowledge_queries', {})
-    #         if query_ref not in plan_ongoing_queries.keys():
-    #             continue
-    #         else:
-    #             ongoing_query = plan_ongoing_queries[query_ref]
-    #             ongoing_query['data'] = query_data
-    #             self.update_plan(plan=plan)
-
     def publish_adaptation_plan(self, event_type, new_plan):
         new_event_data = {
             'id': self.service_based_random_event_id(),
             'plan': new_plan
         }
+        self.latest_plan = new_plan
         self.publish_event_type_to_stream(
             event_type=event_type, new_event_data=new_event_data
         )
@@ -199,7 +143,7 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         if not super(AdaptationPlanner, self).process_event_type(event_type, event_data, json_msg):
             return False
         plan_requests_types = [
-            'QuerySchedulingPlanRequested',
+            'NewQuerySchedulingPlanRequested',
             'ServiceWorkerOverloadedPlanRequested',
             'ServiceWorkerBestIdlePlanRequested',
             'UnnecessaryLoadSheddingPlanRequested',
@@ -216,11 +160,11 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
 
     def log_state(self):
         super(AdaptationPlanner, self).log_state()
-        self._log_dict('Last plan executed:', self.last_executed)
-        # self.logger.info(f'Last execution_plan: {self.last_executed.get("execution_plan", {})}')
+        # self.logger.info(f'Last execution_plan: {self.latest_plan.get("execution_plan", {})}')
         self._log_dict('All queries', self.all_queries)
         self._log_dict('All Service workers', self.all_services_worker_pool)
         self._log_dict('All Bufferstreams', self.all_buffer_streams)
+        self._log_dict('Last plan executed:', self.latest_plan)
         self.logger.debug(f'- Scheduler Planner: {self.scheduler_planner}')
 
     def run(self):
