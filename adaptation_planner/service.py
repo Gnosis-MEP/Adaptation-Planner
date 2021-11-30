@@ -36,6 +36,8 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         self.data_validation_fields = ['id']
 
         self.latest_plan = {}
+        self.current_plan = None
+        self.queued_plan = None
 
         self.ce_endpoint_stream_key = 'wm-data'
         self.scheduler_planner_type = scheduler_planner_type
@@ -100,6 +102,7 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         self.publish_event_type_to_stream(
             event_type=event_type, new_event_data=new_event_data
         )
+        self.current_plan = None
 
     def update_bufferstreams_from_new_query(self, new_query):
         query_bufferstream_dict = new_query.get('buffer_stream', None)
@@ -127,6 +130,7 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
             'execution_plan': None,
             'change_request': change_request
         }
+        self.current_plan = new_plan
         return new_plan
 
     def process_plan_requested(self, event_data):
@@ -171,5 +175,9 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         super(AdaptationPlanner, self).run()
         self.log_state()
         self.cmd_thread = threading.Thread(target=self.run_forever, args=(self.process_cmd,))
+        self.cmd_planning_thread = threading.Thread(
+            target=self.run_forever, args=(self.process_cmd,), kwargs={'cg_sub_group': 'planning'})
         self.cmd_thread.start()
+        self.cmd_planning_thread.start()
         self.cmd_thread.join()
+        self.cmd_planning_thread.join()
