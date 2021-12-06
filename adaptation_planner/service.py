@@ -8,7 +8,7 @@ from adaptation_planner.planners.event_driven.baselines import (
     RandomSchedulerPlanner
 )
 from adaptation_planner.planners.event_driven.qqos_based import (
-    QQoS_TK_LP_LS_SchedulerPlanner
+    QQoS_TK_LP_SchedulerPlanner
 )
 
 
@@ -60,7 +60,7 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
             'random': RandomSchedulerPlanner(
                 self, self.ce_endpoint_stream_key,
             ),
-            'QQoS-TK-LP-LS': QQoS_TK_LP_LS_SchedulerPlanner(
+            'QQoS-TK-LP': QQoS_TK_LP_SchedulerPlanner(
                 self, self.ce_endpoint_stream_key
             ),
         }

@@ -121,3 +121,74 @@ class BaseSchedulerPlanner(object):
         scheduling_plan = self.create_scheduling_plan()
         plan['execution_plan'] = scheduling_plan
         return plan
+
+
+class BaseQoSSchedulerPlanner(BaseSchedulerPlanner):
+
+    def __init__(self, parent_service, ce_endpoint_stream_key):
+        super(BaseQoSSchedulerPlanner, self).__init__(parent_service, ce_endpoint_stream_key)
+        self.events_capacity_key = 'events_capacity'
+
+    def get_bufferstream_planned_event_count(self, buffer_stream_entity):
+        fps = float(buffer_stream_entity['fps'])
+        num_events = self.adaptation_delta * fps
+        return math.ceil(num_events)
+
+    def initialize_planned_worker_event_capacity(self, worker):
+        if self.events_capacity_key not in worker['resources']['planned']:
+            queue_size = int(worker['monitoring']['queue_size'])
+            throughput = float(worker['monitoring']['throughput'])
+            max_events_capacity = self.adaptation_delta * throughput
+            events_capacity = max_events_capacity - queue_size
+            worker['resources']['planned'][self.events_capacity_key] = events_capacity
+
+    def initialize_service_workers_planned_capacity(self, worker_pool):
+        for worker_key, worker in worker_pool.items():
+            self.initialize_planned_worker_event_capacity(worker)
+        return worker_pool
+
+    def get_worker_events_capacity(self, worker):
+        current_capacity = worker['resources']['planned'].get(self.events_capacity_key, 0)
+        return current_capacity
+
+    def is_worker_overloaded(self, worker):
+        return self.get_worker_events_capacity(worker) <= 0
+
+    def filter_best_than_avg_and_overloaded_service_worker_pool_or_all(self, worker_pool):
+        full_filter_pool = {}
+        better_or_equal_avg_pool = {}
+        if len(worker_pool.keys()) == 0:
+            return worker_pool
+
+        total_energy_consumption = sum([float(w['monitoring']['energy_consumption']) for w in worker_pool.values()])
+        avg_energy = total_energy_consumption / len(worker_pool.keys())
+        for worker_key, worker in worker_pool.items():
+            is_avg_on = float(worker['monitoring']['energy_consumption']) <= avg_energy
+            if is_avg_on:
+                better_or_equal_avg_pool[worker_key] = worker
+                if not self.is_worker_overloaded(worker):
+                    full_filter_pool[worker_key] = worker
+
+        selected_worker_pool = better_or_equal_avg_pool
+        if len(full_filter_pool.keys()) != 0:
+            selected_worker_pool = full_filter_pool
+        return selected_worker_pool
+
+    def filter_overloaded_service_worker_pool_or_all_if_empty(self, worker_pool):
+        selected_worker_pool = dict(filter(
+            lambda kv: not self.is_worker_overloaded(kv[1]), worker_pool.items()
+        ))
+        if len(selected_worker_pool) == 0:
+            selected_worker_pool = worker_pool
+        return selected_worker_pool
+
+    def get_init_workers_filter_based_on_qos_policy(self, service, qos_policy_name, qos_policy_value):
+        worker_pool = self.all_services_worker_pool[service]
+        worker_pool = self.initialize_service_workers_planned_capacity(worker_pool)
+        if qos_policy_name == 'energy_consumption' and qos_policy_value == 'min':
+            selected_worker_pool = self.filter_best_than_avg_and_overloaded_service_worker_pool_or_all(
+                worker_pool)
+        else:
+            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
+                worker_pool)
+        return selected_worker_pool
