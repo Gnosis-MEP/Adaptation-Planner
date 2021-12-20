@@ -8,10 +8,12 @@ from adaptation_planner.planners.event_driven.baselines import (
     RandomSchedulerPlanner
 )
 from adaptation_planner.planners.event_driven.qqos_based import (
-    QQoS_W_HP_SchedulerPlanner
+    QQoS_W_HP_SchedulerPlanner,
+    QQoS_TK_LP_SchedulerPlanner
 )
 from adaptation_planner.planners.event_driven.load_shedding import (
-    QQoS_W_HP_LS_SchedulerPlanner
+    QQoS_W_HP_LS_SchedulerPlanner,
+    QQoS_TK_LP_LS_SchedulerPlanner
 )
 
 
@@ -69,33 +71,13 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
             'QQoS-W-HP-LS': QQoS_W_HP_LS_SchedulerPlanner(
                 self, self.ce_endpoint_stream_key
             ),
+            'QQoS-TK-LP': QQoS_TK_LP_SchedulerPlanner(
+                self, self.ce_endpoint_stream_key
+            ),
+            'QQoS-TK-LP-LS': QQoS_TK_LP_LS_SchedulerPlanner(
+                self, self.ce_endpoint_stream_key
+            ),
         }
-        #     'single_best': MaxEnergyForQueueLimitSchedulerPlanner(
-        #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-        #     ),
-        #     'weighted_random': WeightedRandomMaxEnergyForQueueLimitSchedulerPlanner(
-        #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-        #     ),
-            # 'random': RandomSchedulerPlanner(
-            #     self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-            # ),
-        #     'round_robin': RoundRobinSchedulerPlanner(
-        #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key,
-        #     ),
-        #     'qos_single_best': SingleBestForQoSSinglePolicySchedulerPlanner(
-        #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
-        #     ),
-        #     'qos_weighted_random': WeightedRandomQoSSinglePolicySchedulerPlanner(
-        #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
-        #     ),
-        #     'qos_weighted_random_load_shedding': WeightedRandomQoSSinglePolicyLSSchedulerPlanner(
-        #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
-        #     ),
-        #     'qos_single_best_load_shedding': SingleBestForQoSSinglePolicyLSSchedulerPlanner(
-        #         self, self.scheduler_cmd_stream_key, self.ce_endpoint_stream_key
-        #     ),
-
-        # }
 
         self.scheduler_planner = self.available_scheduler_planners[self.scheduler_planner_type]
 
