@@ -6,11 +6,14 @@ import numpy as np
 from .base import BaseQoSSchedulerPlanner
 
 
-class QQoS_TK_LP_SchedulerPlanner(BaseQoSSchedulerPlanner):
+class QQoS_W_HP_SchedulerPlanner(BaseQoSSchedulerPlanner):
+    """
+    Query-aware QoS Weighted High Parallelism scheduler.
+    """
 
     def __init__(self, parent_service, ce_endpoint_stream_key):
-        super(QQoS_TK_LP_SchedulerPlanner, self).__init__(parent_service, ce_endpoint_stream_key)
-        self.strategy_name = 'QQoS-TK-LP'
+        super(QQoS_W_HP_SchedulerPlanner, self).__init__(parent_service, ce_endpoint_stream_key)
+        self.strategy_name = 'QQoS-W-HP'
 
     def create_filtered_and_weighted_workers_pool(
             self, required_services, planned_event_count, qos_policy_name, qos_policy_value):

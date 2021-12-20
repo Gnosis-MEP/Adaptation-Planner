@@ -21,7 +21,7 @@ class BaseSchedulerPlanner(object):
 
     def get_query_required_services(self, query):
         service_chain = query['service_chain']
-        return list(set(filter(lambda x: x != 'WindowManager', service_chain)))
+        return list(filter(lambda x: x != 'WindowManager', service_chain))
 
     def get_buffer_stream_required_services(self, buffer_stream_entity):
         required_services = []
