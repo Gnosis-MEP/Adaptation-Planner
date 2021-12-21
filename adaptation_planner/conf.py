@@ -13,7 +13,7 @@ TRACER_REPORTING_PORT = config('TRACER_REPORTING_PORT', default='6831')
 
 MOCKED_OD_STREAM_KEY = config('MOCKED_OD_STREAM_KEY', default='object-detection-ssd-gpu-data')
 
-SCHEDULER_PLANNER_TYPE = config('SCHEDULER_PLANNER_TYPE', default='single_best')
+SCHEDULER_PLANNER_TYPE = config('SCHEDULER_PLANNER_TYPE', default='QQoS-TK-LP')
 
 QUERY_SERVICE_CHAIN_FIELD = config('QUERY_SERVICE_CHAIN_FIELD', default='data_flow')
 
