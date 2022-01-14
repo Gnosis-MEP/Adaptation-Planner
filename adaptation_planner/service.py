@@ -5,7 +5,8 @@ from event_service_utils.services.event_driven import BaseEventDrivenCMDService
 from event_service_utils.tracing.jaeger import init_tracer
 
 from adaptation_planner.planners.event_driven.baselines import (
-    RandomSchedulerPlanner
+    RandomSchedulerPlanner,
+    RoundRobinSchedulerPlanner
 )
 from adaptation_planner.planners.event_driven.qqos_based import (
     QQoS_W_HP_SchedulerPlanner,
@@ -63,6 +64,9 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
     def setup_scheduler_planner(self):
         self.available_scheduler_planners = {
             'random': RandomSchedulerPlanner(
+                self, self.ce_endpoint_stream_key,
+            ),
+            'round_robin': RoundRobinSchedulerPlanner(
                 self, self.ce_endpoint_stream_key,
             ),
             'QQoS-W-HP': QQoS_W_HP_SchedulerPlanner(
