@@ -166,6 +166,7 @@ class QQoS_TK_LP_SchedulerPlanner(BaseQoSSchedulerPlanner):
         self.strategy_name = 'QQoS-TK-LP'
 
     def workers_key_sorted_by_qos(self, worker_pool, qos_policy_name, qos_policy_value):
+        "deprecation: this method will be removed after the slr rank is implemented"
         reverse = True if qos_policy_value == 'max' else False
 
         metric_name = qos_policy_name
@@ -182,6 +183,24 @@ class QQoS_TK_LP_SchedulerPlanner(BaseQoSSchedulerPlanner):
 
         return sorted_workers
 
+    def worker_key_sorted_by_slr_rank(self, worker_pool, service_type, slr_profile_id):
+        slr_profile = self.slr_profiles_by_service.get(service_type, {}).get(slr_profile_id)
+
+        if slr_profile is None:
+            self.parent_service.logger.warning((
+                f'No slr profile for: service type: "{service_type}" and slr_profile_id: {slr_profile_id}'
+                'Will not sort the worker pool based on the slr rank.'
+            ))
+            return list(worker_pool.keys())
+
+        sorted_worker_keys = []
+        for rank_index in slr_profile['ranking_index']:
+            worker_key = slr_profile['alternatives_ids'][rank_index]
+            if worker_key in worker_pool.keys():
+                sorted_worker_keys.append(worker_key)
+
+        return sorted_worker_keys
+
     def update_workers_planned_resources(self, required_services, buffer_stream_plan, required_events):
         for dataflow_index, service in enumerate(required_services):
             worker_key = buffer_stream_plan[dataflow_index][0]
@@ -193,11 +212,11 @@ class QQoS_TK_LP_SchedulerPlanner(BaseQoSSchedulerPlanner):
     def create_buffer_stream_plan(self, buffer_stream_entity):
         required_services = self.get_buffer_stream_required_services(buffer_stream_entity)
         first_query = list(buffer_stream_entity['queries'].values())[0]
+        slr_profile_id = first_query.get('slr_profile_id', None)
         qos_policies = list(first_query['parsed_query']['qos_policies'].items())
-        if not qos_policies:
-            raise RuntimeError(f'No QoS policy defined for query "{first_query}"')
+        if not slr_profile_id:
+            raise RuntimeError(f'No SLR Profile ID for query "{first_query}"')
         qos_policy_name, qos_policy_value = qos_policies[0]
-
         required_events = self.get_bufferstream_planned_event_count(buffer_stream_entity)
 
         buffer_stream_plan = []
@@ -205,10 +224,11 @@ class QQoS_TK_LP_SchedulerPlanner(BaseQoSSchedulerPlanner):
             selected_worker_pool = self.get_init_workers_filter_based_on_qos_policy(
                 service, qos_policy_name, qos_policy_value)
 
-            qos_sorted_workers_keys = self.workers_key_sorted_by_qos(
-                selected_worker_pool, qos_policy_name, qos_policy_value)
+            slr_sorted_workers_keys = self.worker_key_sorted_by_slr_rank(
+                selected_worker_pool, service, slr_profile_id
+            )
 
-            best_worker_key = qos_sorted_workers_keys[0]
+            best_worker_key = slr_sorted_workers_keys[0]
             buffer_stream_plan.append([best_worker_key])
         self.update_workers_planned_resources(required_services, buffer_stream_plan, required_events)
         buffer_stream_plan.append([self.ce_endpoint_stream_key])

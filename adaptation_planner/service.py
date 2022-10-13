@@ -4,6 +4,12 @@ from event_service_utils.logging.decorators import timer_logger
 from event_service_utils.services.event_driven import BaseEventDrivenCMDService
 from event_service_utils.tracing.jaeger import init_tracer
 
+from adaptation_planner.conf import (
+    LISTEN_EVENT_TYPE_QUERY_CREATED,
+    LISTEN_EVENT_TYPE_SERVICE_WORKERS_STREAM_MONITORED,
+    LISTEN_EVENT_TYPE_SERVICE_SLR_PROFILES_RANKED,
+)
+
 from adaptation_planner.planners.event_driven.baselines import (
     RandomSchedulerPlanner,
     RoundRobinSchedulerPlanner
@@ -53,6 +59,7 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         self.all_services_worker_pool = {}
         self.all_buffer_streams = {}
         self.all_queries = {}
+        self.slr_profiles_by_service = {}
 
         self.request_type_to_plan_map = {
             'ServiceWorkerOverloadedPlanRequested': 'ServiceWorkerOverloadedPlanned',
@@ -135,6 +142,11 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         service_workers = event_data['service_workers']
         self.all_services_worker_pool = service_workers
 
+    def process_service_slr_profile_ranked(self, event_data):
+        service_type = event_data['service_type']
+        slr_profiles = event_data['slr_profiles']
+        self.slr_profiles_by_service[service_type] = slr_profiles
+
     def process_event_type(self, event_type, event_data, json_msg):
         if not super(AdaptationPlanner, self).process_event_type(event_type, event_data, json_msg):
             return False
@@ -144,10 +156,12 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
             'ServiceWorkerBestIdlePlanRequested',
             'UnnecessaryLoadSheddingPlanRequested',
         ]
-        if event_type == 'QueryCreated':
+        if event_type == LISTEN_EVENT_TYPE_QUERY_CREATED:
             self.process_query_created(event_data)
-        elif event_type == 'ServiceWorkersStreamMonitored':
+        elif event_type == LISTEN_EVENT_TYPE_SERVICE_WORKERS_STREAM_MONITORED:
             self.process_service_workers_monitored(event_data)
+        elif event_type == LISTEN_EVENT_TYPE_SERVICE_SLR_PROFILES_RANKED:
+            self.process_service_slr_profile_ranked(event_data)
         elif event_type in plan_requests_types:
             self.process_plan_requested(event_data)
 
@@ -159,6 +173,7 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         # self.logger.info(f'Last execution_plan: {self.latest_plan.get("execution_plan", {})}')
         self._log_dict('All queries', self.all_queries)
         self._log_dict('All Service workers', self.all_services_worker_pool)
+        self._log_dict('All SLR profiles', self.slr_profiles_by_service)
         self._log_dict('All Bufferstreams', self.all_buffer_streams)
         self._log_dict('Last plan executed:', self.latest_plan)
         self.logger.debug(f'- Scheduler Planner: {self.scheduler_planner}')

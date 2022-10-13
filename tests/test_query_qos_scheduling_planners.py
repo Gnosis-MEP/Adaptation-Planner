@@ -13,6 +13,17 @@ class TestQQoS_TK_LP_SchedulerPlanner(BaseSchedulerPlannerTestCase):
         self.planner = QQoS_TK_LP_SchedulerPlanner(
             self.parent_service, self.ce_endpoint_stream_key)
 
+
+    def test_worker_key_sorted_by_slr_rank(self):
+        service_type = 'ObjectDetection'
+        self.planner.slr_profiles_by_service = self.slr_profiles_by_service
+
+        worker_pool = self.all_services_worker_pool[service_type]
+        slr_profile_id = 'ObjectDetection-[0.1, 0.1, 0.2]-[0.3, 0.4, 0.5]-[0.7, 0.8, 0.9]'
+        ret = self.planner.worker_key_sorted_by_slr_rank(
+            worker_pool, service_type=service_type, slr_profile_id=slr_profile_id)
+        self.assertListEqual(ret, ['object-detection-2', 'object-detection-1'])
+
     def test_workers_sorted_by_qos_accuracy_max(self):
         worker_pool = self.all_services_worker_pool['ObjectDetection']
         qos_policy_name = 'accuracy'
@@ -20,6 +31,7 @@ class TestQQoS_TK_LP_SchedulerPlanner(BaseSchedulerPlannerTestCase):
         ret = self.planner.workers_key_sorted_by_qos(
             worker_pool, qos_policy_name=qos_policy_name, qos_policy_value=qos_policy_value)
         self.assertListEqual(ret, ['object-detection-2', 'object-detection-1'])
+
 
     def test_workers_sorted_by_qos_latency_min(self):
         worker_pool = self.all_services_worker_pool['ObjectDetection']

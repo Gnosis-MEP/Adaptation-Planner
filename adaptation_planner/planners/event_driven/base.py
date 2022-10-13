@@ -9,6 +9,7 @@ class BaseSchedulerPlanner(object):
         super(BaseSchedulerPlanner, self).__init__()
         self.parent_service = parent_service
         self.ce_endpoint_stream_key = ce_endpoint_stream_key
+        self.slr_profiles_by_service = {}
         self.all_services_worker_pool = {}
         self.all_buffer_streams = {}
         self.all_queries = {}
@@ -51,6 +52,7 @@ class BaseSchedulerPlanner(object):
         self.prepare_local_services_with_workers()
         self.prepare_local_buffer_stream_entities()
         self.prepare_required_services_workload_status()
+        self.prepare_slr_profiles_by_services()
 
     def prepare_local_queries_entities(self):
         self.all_queries = copy.deepcopy(self.parent_service.all_queries)
@@ -111,6 +113,15 @@ class BaseSchedulerPlanner(object):
                     is_system_overloaded = True
 
         self.required_services_workload_status['_status'] = is_system_overloaded
+
+    def prepare_slr_profiles_by_services(self):
+        self.slr_profiles_by_service = copy.deepcopy(self.parent_service.slr_profiles_by_service)
+        for service_type,  service_slr_profiles in self.slr_profiles_by_service.items():
+            for slr_profile_id, slr_profile in service_slr_profiles.items():
+                for query_id in slr_profile['query_ids']:
+                    query = self.all_queries.get(query_id, None)
+                    if query is not None:
+                        query['slr_profile_id'] = slr_profile_id
 
     def create_buffer_stream_choices_plan(self, buffer_stream_entity):
         raise NotImplementedError('"create_buffer_stream_choices_plan" was not implemented')
@@ -182,13 +193,14 @@ class BaseQoSSchedulerPlanner(BaseSchedulerPlanner):
             selected_worker_pool = worker_pool
         return selected_worker_pool
 
+
     def get_init_workers_filter_based_on_qos_policy(self, service, qos_policy_name, qos_policy_value):
         worker_pool = self.all_services_worker_pool[service]
         worker_pool = self.initialize_service_workers_planned_capacity(worker_pool)
-        if qos_policy_name == 'energy_consumption' and qos_policy_value == 'min':
-            selected_worker_pool = self.filter_best_than_avg_and_overloaded_service_worker_pool_or_all(
-                worker_pool)
-        else:
-            selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
-                worker_pool)
+        # if qos_policy_name == 'energy_consumption' and qos_policy_value == 'min':
+        #     selected_worker_pool = self.filter_best_than_avg_and_overloaded_service_worker_pool_or_all(
+        #         worker_pool)
+        # else:
+        selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
+            worker_pool)
         return selected_worker_pool

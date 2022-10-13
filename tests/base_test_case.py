@@ -140,3 +140,24 @@ class BaseSchedulerPlannerTestCase(TestCase):
                 self.worker_c['monitoring']['stream_key']: self.worker_c,
             }
         }
+
+        self.slr_profiles_by_service = {
+            'ObjectDetection': {
+                'ObjectDetection-[0.1, 0.1, 0.2]-[0.3, 0.4, 0.5]-[0.7, 0.8, 0.9]':{
+                    'query_ids': ['48321bfc85870426a28298662d458b10'],
+                    'criteria_weights': [[0.1, 0.1, 0.2], [0.3, 0.4, 0.5], [0.7, 0.8, 0.9]],
+                    'alternatives_ids': ['object-detection-1', 'object-detection-2'],
+                    'ranking_index': [1, 0],
+                    'ranking_scores': [0.7, 0.3],
+                }
+            },
+            'ColorDetection': {
+                'ColorDetection-[0.1, 0.1, 0.2]-[0.3, 0.4, 0.5]-[0.7, 0.8, 0.9]':{
+                    'query_ids': ['48321bfc85870426a28298662d458b10'],
+                    'criteria_weights': [[0.1, 0.1, 0.2], [0.3, 0.4, 0.5], [0.7, 0.8, 0.9]],
+                    'alternatives_ids': ['color-detection'],
+                    'ranking_index': [0],
+                    'ranking_scores': [1.0],
+                }
+            }
+        }
