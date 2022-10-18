@@ -36,7 +36,9 @@ class BaseSchedulerPlannerTestCase(TestCase):
                     },
                     "ret": "RETURN *",
                     "qos_policies": {
-                        "latency": "min"
+                        "accuracy": "high_importance",
+                        "energy_consumption": "medium_low_importance",
+                        "latency": "medium_low_importance",
                     }
                 },
                 "buffer_stream": {
@@ -50,7 +52,8 @@ class BaseSchedulerPlannerTestCase(TestCase):
                     "ObjectDetection",
                     "ColorDetection"
                 ],
-                "id": "ClientManager:321aa0c7-171c-4d91-a312-dc00e2b7e6ba"
+                "id": "ClientManager:321aa0c7-171c-4d91-a312-dc00e2b7e6ba",
+                "slr_profile_id": "ObjectDetection-[0.1, 0.1, 0.2]-[0.3, 0.4, 0.5]-[0.7, 0.8, 0.9]",
             }
         }
 

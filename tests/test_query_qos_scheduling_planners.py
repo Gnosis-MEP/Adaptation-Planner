@@ -24,37 +24,13 @@ class TestQQoS_TK_LP_SchedulerPlanner(BaseSchedulerPlannerTestCase):
             worker_pool, service_type=service_type, slr_profile_id=slr_profile_id)
         self.assertListEqual(ret, ['object-detection-2', 'object-detection-1'])
 
-    def test_workers_sorted_by_qos_accuracy_max(self):
-        worker_pool = self.all_services_worker_pool['ObjectDetection']
-        qos_policy_name = 'accuracy'
-        qos_policy_value = 'max'
-        ret = self.planner.workers_key_sorted_by_qos(
-            worker_pool, qos_policy_name=qos_policy_name, qos_policy_value=qos_policy_value)
-        self.assertListEqual(ret, ['object-detection-2', 'object-detection-1'])
-
-
-    def test_workers_sorted_by_qos_latency_min(self):
-        worker_pool = self.all_services_worker_pool['ObjectDetection']
-        qos_policy_name = 'latency'
-        qos_policy_value = 'min'
-        ret = self.planner.workers_key_sorted_by_qos(
-            worker_pool, qos_policy_name=qos_policy_name, qos_policy_value=qos_policy_value)
-        self.assertListEqual(ret, ['object-detection-2', 'object-detection-1'])
-
-    def test_workers_sorted_by_qos_energy_min(self):
-        worker_pool = self.all_services_worker_pool['ObjectDetection']
-        qos_policy_name = 'energy_consumption'
-        qos_policy_value = 'min'
-        ret = self.planner.workers_key_sorted_by_qos(
-            worker_pool, qos_policy_name=qos_policy_name, qos_policy_value=qos_policy_value)
-        self.assertListEqual(ret, ['object-detection-1', 'object-detection-2'])
-
     def test_update_workers_planned_resources_when_capacity_is_present(self):
         required_events = 101
         required_services = ['ObjectDetection']
         buffer_stream_plan = [['object-detection-1']]
 
         self.planner.all_services_worker_pool = self.all_services_worker_pool
+
         self.worker_a['resources']['planned']['events_capacity'] = 200
 
         self.planner.update_workers_planned_resources(required_services, buffer_stream_plan, required_events)
@@ -93,40 +69,27 @@ class TestQQoS_TK_LP_SchedulerPlanner(BaseSchedulerPlannerTestCase):
             self.worker_b['resources']['planned']['events_capacity'],
             -5)
 
-    def test_create_buffer_stream_plan_accuracy_max(self):
+    def test_create_buffer_stream_plan(self):
         self.all_queries['48321bfc85870426a28298662d458b10']['parsed_query']['qos_policies'] = {
-            'accuracy': 'max'
+            'accuracy': 'high_importance',
+            'energy_consumption': 'medium_importance',
+            'latency': 'medium_low_importance'
         }
+        slr_profile_id = 'ObjectDetection-[0.1, 0.1, 0.2]-[0.3, 0.4, 0.5]-[0.7, 0.8, 0.9]'
+        self.all_queries['48321bfc85870426a28298662d458b10']['slr_profile_id'] = slr_profile_id
         bufferstream_entity = self.all_buffer_streams['f79681aaa510938aca8c60506171d9d8']
         self.planner.all_services_worker_pool = self.all_services_worker_pool
+        self.planner.slr_profiles_by_service = self.slr_profiles_by_service
         ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
         expected_bf_plan = [['object-detection-2'], ['color-detection'], ['wm-data']]
-        self.assertListEqual(ret, expected_bf_plan)
-
-    def test_create_buffer_stream_plan_latency_min(self):
-        self.all_queries['48321bfc85870426a28298662d458b10']['parsed_query']['qos_policies'] = {
-            'latency': 'min'
-        }
-        bufferstream_entity = self.all_buffer_streams['f79681aaa510938aca8c60506171d9d8']
-        self.planner.all_services_worker_pool = self.all_services_worker_pool
-        ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
-        expected_bf_plan = [['object-detection-2'], ['color-detection'], ['wm-data']]
-        self.assertListEqual(ret, expected_bf_plan)
-
-    def test_create_buffer_stream_plan_energy_min(self):
-        self.all_queries['48321bfc85870426a28298662d458b10']['parsed_query']['qos_policies'] = {
-            'energy_consumption': 'min'
-        }
-        bufferstream_entity = self.all_buffer_streams['f79681aaa510938aca8c60506171d9d8']
-        self.planner.all_services_worker_pool = self.all_services_worker_pool
-        ret = self.planner.create_buffer_stream_plan(bufferstream_entity)
-        expected_bf_plan = [['object-detection-1'], ['color-detection'], ['wm-data']]
         self.assertListEqual(ret, expected_bf_plan)
 
     @patch('adaptation_planner.planners.event_driven.qqos_based.QQoS_TK_LP_SchedulerPlanner.create_buffer_stream_plan')
     def test_create_buffer_stream_choices_plan_has_correct_return_format(self, mocked_create_plan):
         self.all_queries['48321bfc85870426a28298662d458b10']['parsed_query']['qos_policies'] = {
-            'energy_consumption': 'min'
+            'accuracy': 'high_importance',
+            'energy_consumption': 'medium_importance',
+            'latency': 'medium_low_importance'
         }
         bufferstream_entity = self.all_buffer_streams['f79681aaa510938aca8c60506171d9d8']
         mocked_create_plan.return_value = 'buffer_stream_plan'
@@ -535,7 +498,7 @@ class TestQQoS_W_HP_SchedulerPlanner(BaseSchedulerPlannerTestCase):
 
         self.assertTrue(filtered.called)
         filtered.assert_called_once_with(
-            ['ObjectDetection', 'ColorDetection'], 10, 'latency', 'min')
+            ['ObjectDetection', 'ColorDetection'], 10, 'accuracy', 'high_importance')
 
         self.assertTrue(create_choices.called)
         create_choices.assert_called_once_with('mocked_per_service_worker_keys_with_weights')

@@ -201,6 +201,5 @@ class BaseQoSSchedulerPlanner(BaseSchedulerPlanner):
         #     selected_worker_pool = self.filter_best_than_avg_and_overloaded_service_worker_pool_or_all(
         #         worker_pool)
         # else:
-        selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(
-            worker_pool)
+        selected_worker_pool = self.filter_overloaded_service_worker_pool_or_all_if_empty(worker_pool)
         return selected_worker_pool

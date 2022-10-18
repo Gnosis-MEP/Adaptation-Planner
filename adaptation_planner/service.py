@@ -8,6 +8,16 @@ from adaptation_planner.conf import (
     LISTEN_EVENT_TYPE_QUERY_CREATED,
     LISTEN_EVENT_TYPE_SERVICE_WORKERS_STREAM_MONITORED,
     LISTEN_EVENT_TYPE_SERVICE_SLR_PROFILES_RANKED,
+    LISTEN_EVENT_TYPE_NEW_QUERY_SCHEDULING_PLAN_REQUESTED,
+    LISTEN_EVENT_TYPE_SERVICE_WORKER_OVERLOADED_PLAN_REQUESTED,
+    LISTEN_EVENT_TYPE_SERVICE_WORKER_SLR_PROFILE_CHANGE_PLAN_REQUESTED,
+    LISTEN_EVENT_TYPE_SERVICE_WORKER_BEST_IDLE_REQUESTED,
+    LISTEN_EVENT_TYPE_UNNECESSARY_LOAD_SHEDDING_REQUESTED,
+    PUB_EVENT_TYPE_NEW_QUERY_SCHEDULING_PLANNED,
+    PUB_EVENT_TYPE_SERVICE_WORKER_SLR_PROFILE_PLANNED,
+    PUB_EVENT_TYPE_SERVICE_WORKER_OVERLOADED_PLANNED,
+    PUB_EVENT_TYPE_SERVICE_WORKER_BEST_IDLE_PLANNED,
+    PUB_EVENT_TYPE_UNNECESSARY_LOAD_SHEDDING_PLANNED,
 )
 
 from adaptation_planner.planners.event_driven.baselines import (
@@ -62,10 +72,11 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
         self.slr_profiles_by_service = {}
 
         self.request_type_to_plan_map = {
-            'ServiceWorkerOverloadedPlanRequested': 'ServiceWorkerOverloadedPlanned',
-            'ServiceWorkerBestIdlePlanRequested': 'ServiceWorkerBestIdlePlanned',
-            'UnnecessaryLoadSheddingPlanRequested': 'UnnecessaryLoadSheddingPlanned',
-            'NewQuerySchedulingPlanRequested': 'NewQuerySchedulingPlanned',
+            LISTEN_EVENT_TYPE_NEW_QUERY_SCHEDULING_PLAN_REQUESTED: PUB_EVENT_TYPE_NEW_QUERY_SCHEDULING_PLANNED,
+            LISTEN_EVENT_TYPE_SERVICE_WORKER_SLR_PROFILE_CHANGE_PLAN_REQUESTED: PUB_EVENT_TYPE_SERVICE_WORKER_SLR_PROFILE_PLANNED,
+            LISTEN_EVENT_TYPE_SERVICE_WORKER_OVERLOADED_PLAN_REQUESTED: PUB_EVENT_TYPE_SERVICE_WORKER_OVERLOADED_PLANNED,
+            LISTEN_EVENT_TYPE_SERVICE_WORKER_BEST_IDLE_REQUESTED: PUB_EVENT_TYPE_SERVICE_WORKER_BEST_IDLE_PLANNED,
+            LISTEN_EVENT_TYPE_UNNECESSARY_LOAD_SHEDDING_REQUESTED: PUB_EVENT_TYPE_UNNECESSARY_LOAD_SHEDDING_PLANNED,
         }
 
     def setup_scheduler_planner(self):
@@ -150,19 +161,14 @@ class AdaptationPlanner(BaseEventDrivenCMDService):
     def process_event_type(self, event_type, event_data, json_msg):
         if not super(AdaptationPlanner, self).process_event_type(event_type, event_data, json_msg):
             return False
-        plan_requests_types = [
-            'NewQuerySchedulingPlanRequested',
-            'ServiceWorkerOverloadedPlanRequested',
-            'ServiceWorkerBestIdlePlanRequested',
-            'UnnecessaryLoadSheddingPlanRequested',
-        ]
+
         if event_type == LISTEN_EVENT_TYPE_QUERY_CREATED:
             self.process_query_created(event_data)
         elif event_type == LISTEN_EVENT_TYPE_SERVICE_WORKERS_STREAM_MONITORED:
             self.process_service_workers_monitored(event_data)
         elif event_type == LISTEN_EVENT_TYPE_SERVICE_SLR_PROFILES_RANKED:
             self.process_service_slr_profile_ranked(event_data)
-        elif event_type in plan_requests_types:
+        elif event_type in self.request_type_to_plan_map.keys():
             self.process_plan_requested(event_data)
 
     def get_destination_streams(self, destination):
