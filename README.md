@@ -1,23 +1,30 @@
 # Adaptation Planner
 Service responsible for the Planning phase of the MAPE-K architecture for self-adaptive systems.
 
-# Commands Stream
-## Inputs
-...
 
-## Outputs
-...
-# Data Stream
-## inputs
-...
+# Events Listened
+ - [QUERY_CREATED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#QUERY_CREATED)
+ - [SERVICE_WORKERS_STREAM_MONITORED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#SERVICE_WORKERS_STREAM_MONITORED)
+ - [SERVICE_SLR_PROFILES_RANKED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#SERVICE_SLR_PROFILES_RANKED)
+ - [NEW_QUERY_SCHEDULING_PLAN_REQUESTED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#NEW_QUERY_SCHEDULING_PLAN_REQUESTED)
+ - [SERVICE_WORKER_SLR_PROFILE_CHANGE_PLAN_REQUESTED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#SERVICE_WORKER_SLR_PROFILE_CHANGE_PLAN_REQUESTED)
+ - [SERVICE_WORKER_OVERLOADED_PLAN_REQUESTED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#SERVICE_WORKER_OVERLOADED_PLAN_REQUESTED)
+ - [SERVICE_WORKER_BEST_IDLE_REQUESTED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#SERVICE_WORKER_BEST_IDLE_REQUESTED)
+ - [UNNECESSARY_LOAD_SHEDDING_REQUESTED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#UNNECESSARY_LOAD_SHEDDING_REQUESTED)
 
-## Outputs
-...
+# Events Published
+ - [NEW_QUERY_SCHEDULING_PLANNED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#NEW_QUERY_SCHEDULING_PLANNED)
+ - [SERVICE_WORKER_SLR_PROFILE_PLANNED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#SERVICE_WORKER_SLR_PROFILE_PLANNED)
+ - [SERVICE_WORKER_OVERLOADED_PLANNED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#SERVICE_WORKER_OVERLOADED_PLANNED)
+ - [SERVICE_WORKER_BEST_IDLE_PLANNED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#SERVICE_WORKER_BEST_IDLE_PLANNED)
+ - [UNNECESSARY_LOAD_SHEDDING_PLANNED](https://github.com/Gnosis-MEP/Gnosis-Docs/blob/main/EventTypes.md#UNNECESSARY_LOAD_SHEDDING_PLANNED)
+
+
 
 # Installation
 
 ## Configure .env
-Copy the `example.env` file to `.env`, and inside it replace `SIT_PYPI_USER` and `SIT_PYPI_PASS` with the correct information.
+Copy the `example.env` file to `.env`, and inside it replace the variables with the values you need.
 
 ## Installing Dependencies
 
@@ -29,13 +36,9 @@ This runs the installation using **pip** under the hood, but also handle the cro
 
 
 ### Using pip
-To install using pip directly, one needs to use the `--extra-index-url` when running the `pip install` command, in order for to be able to use our private Pypi repository.
-
-Load the environment variables from `.env` file using `source load_env.sh`.
-
 To install from the `requirements.txt` file, run the following command:
 ```
-$ pip install --extra-index-url https://${SIT_PYPI_USER}:${SIT_PYPI_PASS}@sit-pypi.herokuapp.com/simple -r requirements.txt
+$ pip install -r requirements.txt
 ```
 
 # Running
@@ -63,34 +66,5 @@ Build the docker image using: `docker-compose build`
 ## Run
 Use `docker-compose run --rm service` to run the docker image
 
-
-## Gitlab CI auto-build and tests
-
-This is automatically enabled for this project (using the `.gitlab-ci.yml` present in this project root folder).
-
-By default it will build the Dockerfile with every commit sent to the origin repository and tag it as 'dev'.
-
-Afterwards, it will use this newly builty image to run the tests using the `./run_tests.sh` script.
-
-But in order to make the automatic docker image build work, you'll need to set the `SIT_PYPI_USER` and `SIT_PYPI_PASS` variables in the Gitlab CI setting page: [Adaptation Planner CI Setting Page](https://gitlab.insight-centre.org/sit/mps/adaptation-planner/settings/ci_cd).
-
-And, in order to make the automatic tests work, you should also set the rest of the environement variables required by your service, in the this projects `.gitlab-ci.yml` file, in the `variables` section. But don't add sensitive information to this file, such as passwords, this should be set through the Gitlab CI settings page, just like the `SIT_PYPI_USER`.
-
 ## Benchmark Tests
-To run the benchmark tests one needs to manually start the Benchmark stage in the CI pipeline, it shoud be enabled after the tests stage is done. Only by passing the benchmark tests shoud the image be tagged with 'latest', to show that it is a stable docker image.
-
-
-
-needed:
-
-    Query
-        bufferstream
-
-    ServiceWorkerMonitoring
-    ServiceWorkerAnnounced?
-
-    ServiceWorkerOverloadedPlanPlanned
-    ServiceWorkerBestIdlePlanPlanned
-    UnnecessaryLoadSheddingPlanPlanned
-    QuerySchedulingPlanPlanned
-
+To run the benchmark tests one needs to manually start the Benchmark stage in the CI pipeline (Gitlab), it shoud be enabled after the tests stage is done. Only by passing the benchmark tests shoud the image be tagged with 'latest', to show that it is a stable docker image.
